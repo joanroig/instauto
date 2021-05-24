@@ -3,3 +3,9 @@ cookies.json
 followed.json
 following.json
 run.js
+
+// dotenv files
+/secrets/*.env
+
+// vscode files
+.vscode
