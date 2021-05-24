@@ -4,8 +4,12 @@ followed.json
 following.json
 run.js
 
-// dotenv files
+# dotenv files
 /secrets/*.env
 
-// vscode files
+# vscode files
 .vscode
+
+# generated logs and data
+/logs
+/data

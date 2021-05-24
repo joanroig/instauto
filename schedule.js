@@ -4,29 +4,49 @@ const cron = require('node-cron');
 
 const template = require('./template');
 
-function randomMinutes(min, max) {
-  // eslint-disable-next-line no-mixed-operators
-  return (Math.floor(Math.random() * (max - min + 1)) + min) * 60000;
-}
+const fs = require('fs-extra');
 
-function sleep(ms) {
+const path = require('path');
+
+// Setup logs
+fs.ensureDirSync('logs');
+const logStream = fs.createWriteStream(`logs/log-${Date.now()}.log`, {
+  flags: 'a',
+});
+
+function sleepMinutes(min, max) {
+  // eslint-disable-next-line no-mixed-operators
+  const ms = (Math.floor(Math.random() * (max - min + 1)) + min) * 60000;
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
 }
 
-const task = cron.schedule('35 23 * * *', async () => {
-  console.log('Running tasks!');
-  await sleep(randomMinutes(5, 10));
-  console.log('Running first task');
-  await template.run('first');
-  await sleep(randomMinutes(10, 20));
-  console.log('Running second task');
-  await template.run('second');
-  //   await sleep(randomMinutes(10, 20));
-  //   await template.run('third');
-  console.log('All tasks done!');
+async function runAll() {
+  const testFolder = './secrets/';
+  const files = fs.readdirSync(testFolder);
+
+  for (const file of files) {
+    const filename = path.parse(file).name;
+    const message = `${new Date().toLocaleString()} - Running task! ${filename}`;
+    logStream.write(`${message}\r\n`);
+    console.log(message);
+    await sleepMinutes(5, 10);
+    await template.run(filename);
+  }
+
+  const message = `${new Date().toLocaleString()} - All tasks done!`;
+  logStream.write(`${message}\r\n`);
+  console.log(message);
+}
+
+// Run the tasks every day (mm, hh)
+const task = cron.schedule('30 10 * * *', async () => {
+  runAll();
 });
+
+// First run
+runAll();
 
 process.on('SIGHUP', () => {
   console.log('Console closed, terminate the cron process.');
