@@ -4,6 +4,7 @@
   "description": "Instagram automation library written in Node.js",
   "main": "index.js",
   "scripts": {
+    "start": "node schedule",
     "lint": "eslint .",
     "test": "exit 0"
   },
@@ -14,14 +15,17 @@
     "node": ">=8"
   },
   "dependencies": {
-    "fs-extra": "^5.0.0",
+    "dotenv": "^10.0.0",
+    "fs-extra": "^10.0.0",
+    "instauto": "^7.1.1",
     "lodash": "^4.17.10",
+    "node-cron": "^3.0.0",
     "user-agents": "^1.0.559"
   },
   "devDependencies": {
     "eslint": "^4.19.1",
     "eslint-config-airbnb": "^16.1.0",
     "eslint-plugin-import": "^2.9.0",
-    "puppeteer": "^1.19.0"
+    "puppeteer": "^9.1.1"
   }
 }
