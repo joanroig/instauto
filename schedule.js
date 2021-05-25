@@ -8,6 +8,16 @@ const fs = require('fs-extra');
 
 const path = require('path');
 
+// If an argument is passed, it will start puppeteer for Raspberry Pi
+const args = process.argv.slice(2);
+const raspberryMode = args.length > 0;
+if (raspberryMode) {
+  console.log('\nStarted in Raspberry Pi mode! Remember to install Chromium:');
+  console.log('\nsudo apt install chromium-browser chromium-codecs-ffmpeg\n');
+} else {
+  console.log('\nStarted in normal mode\n');
+}
+
 // Setup logs
 fs.ensureDirSync('logs');
 const logStream = fs.createWriteStream(`logs/log-${Date.now()}.log`, {
@@ -33,7 +43,7 @@ async function runAll() {
     logStream.write(`${message}\r\n`);
     console.log(message);
     await sleepMinutes(5, 10);
-    await template.run(filename);
+    await template.run(filename, raspberryMode);
   }
 
   const message = `${new Date().toLocaleString()} - All tasks done!`;
