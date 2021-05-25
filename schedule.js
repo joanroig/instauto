@@ -25,7 +25,8 @@ function sleepMinutes(min, max) {
 async function runAll() {
   const testFolder = './secrets/';
   const files = fs.readdirSync(testFolder);
-
+  // Shuffle account order
+  files.sort(() => 0.5 - Math.random());
   for (const file of files) {
     const filename = path.parse(file).name;
     const message = `${new Date().toLocaleString()} - Running task! ${filename}`;
@@ -41,12 +42,12 @@ async function runAll() {
 }
 
 // Run the tasks every day (mm, hh)
-const task = cron.schedule('30 10 * * *', async () => {
+const task = cron.schedule('30 08 * * *', async () => {
   runAll();
 });
 
 // First run
-runAll();
+// runAll();
 
 process.on('SIGHUP', () => {
   console.log('Console closed, terminate the cron process.');
