@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node schedule",
+    "startpi": "node schedule pi",
     "lint": "eslint .",
     "test": "exit 0"
   },
@@ -18,14 +19,14 @@
     "dotenv": "^10.0.0",
     "fs-extra": "^10.0.0",
     "instauto": "^7.1.1",
-    "lodash": "^4.17.10",
+    "lodash": "^4.17.21",
     "node-cron": "^3.0.0",
-    "user-agents": "^1.0.559"
+    "user-agents": "^1.0.663"
   },
   "devDependencies": {
-    "eslint": "^4.19.1",
-    "eslint-config-airbnb": "^16.1.0",
-    "eslint-plugin-import": "^2.9.0",
+    "eslint": "^7.27.0",
+    "eslint-config-airbnb": "^18.2.1",
+    "eslint-plugin-import": "^2.23.3",
     "puppeteer": "^9.1.1"
   }
 }

@@ -11,7 +11,7 @@ const Instauto = require('instauto'); // eslint-disable-line import/no-unresolve
 const dotenv = require('dotenv');
 const fs = require('fs-extra');
 
-const run = async function run(args) {
+const run = async function run(args, raspberryMode) {
   // Create data file structure
   fs.ensureDirSync(`data/${args}`);
 
@@ -62,7 +62,15 @@ const run = async function run(args) {
   let browser;
 
   try {
-    browser = await puppeteer.launch({ headless: false });
+    if (raspberryMode) {
+      browser = await puppeteer.launch({
+        executablePath: '/usr/bin/chromium-browser',
+        headless: true,
+        args: ['--disable-features=VizDisplayCompositor'],
+      });
+    } else {
+      browser = await puppeteer.launch({ headless: false });
+    }
 
     // Create a database where state will be loaded/saved to
     const instautoDb = await Instauto.JSONDB({
