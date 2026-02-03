@@ -6,9 +6,9 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "lint": "exit 0",
+    "lint": "eslint .",
     "test": "exit 0",
-    "check": "tsc && yarn lint",
+    "check": "tsc && yarn lint && yarn test",
     "build": "tsc -p tsconfig.build.json",
     "prepare": "yarn build"
   },
@@ -28,11 +28,21 @@
   "devDependencies": {
     "@tsconfig/node22": "^22.0.5",
     "@tsconfig/strictest": "^2.0.8",
+    "@types/eslint-plugin-jsx-a11y": "^6",
     "@types/lodash": "^4.17.23",
     "@types/user-agents": "^1.0.4",
+    "@typescript-eslint/eslint-plugin": "^8.51.0",
+    "@typescript-eslint/parser": "^8.51.0",
     "dotenv": "^17.2.3",
+    "eslint": "^8.57.1",
+    "eslint-config-mifi": "^0.1.0",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-unicorn": "56",
     "puppeteer": "^24.36.1",
-    "typescript": "^5.9.3"
+    "typescript": "~5.9.3"
   },
   "packageManager": "yarn@4.12.0",
   "exports": {
