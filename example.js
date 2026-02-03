@@ -1,5 +1,6 @@
 'use strict';
 
+// eslint-disable-next-line import/no-extraneous-dependencies
 require('dotenv').config();
 
 const puppeteer = require('puppeteer'); // eslint-disable-line import/no-extraneous-dependencies
