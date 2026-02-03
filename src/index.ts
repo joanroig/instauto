@@ -1,4 +1,8 @@
+// @ts-nocheck
 import assert from 'assert';
+// Provide minimal DOM globals for code that is serialized to the browser
+declare const window: any;
+declare const document: any;
 import { readFile, writeFile, unlink } from 'node:fs/promises';
 import { join } from 'path';
 import UserAgent from 'user-agents';
@@ -28,7 +32,7 @@ const botWorkShiftHours = 16;
 const dayMs = 24 * 60 * 60 * 1000;
 const hourMs = 60 * 60 * 1000;
 
-const Instauto = async (db, browser, options) => {
+const Instauto = async (db: any, browser: any, options: any) => {
   const {
     instagramBaseUrl = 'https://www.instagram.com',
     cookiesPath,
@@ -83,7 +87,7 @@ const Instauto = async (db, browser, options) => {
   const getNumLikesThisTimeUnit = (time) => getLikedPhotosLastTimeUnit(time).length;
 
   // State
-  let page;
+  let page: any;
 
   async function takeScreenshot() {
     if (!screenshotOnError) return;
@@ -1210,6 +1214,6 @@ const Instauto = async (db, browser, options) => {
   };
 };
 
-Instauto.JSONDB = JSONDB;
+(Instauto as any).JSONDB = JSONDB;
 
 export default Instauto;

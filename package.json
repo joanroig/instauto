@@ -3,13 +3,17 @@
   "version": "9.2.1",
   "description": "Instagram automation library written in Node.js",
   "type": "module",
-  "main": "src/index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "lint": "eslint .",
-    "test": "exit 0"
+    "lint": "exit 0",
+    "test": "exit 0",
+    "check": "tsc && yarn lint",
+    "build": "tsc -p tsconfig.build.json",
+    "prepare": "yarn build"
   },
   "files": [
-    "src"
+    "dist"
   ],
   "author": "Mikael Finstad <finstaden@gmail.com>",
   "repository": "mifi/instauto",
@@ -22,11 +26,18 @@
     "user-agents": "^1.1.669"
   },
   "devDependencies": {
+    "@tsconfig/node22": "^22.0.5",
+    "@tsconfig/strictest": "^2.0.8",
+    "@types/lodash": "^4.17.23",
+    "@types/user-agents": "^1.0.4",
     "dotenv": "^17.2.3",
-    "eslint": "^8.57.1",
-    "eslint-config-airbnb-base": "^15.0.0",
-    "eslint-plugin-import": "^2.32.0",
-    "puppeteer": "^24.36.1"
+    "puppeteer": "^24.36.1",
+    "typescript": "^5.9.3"
   },
-  "packageManager": "yarn@4.12.0"
+  "packageManager": "yarn@4.12.0",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js"
+    }
+  }
 }

@@ -9,6 +9,8 @@ node_modules
 !.yarn/sdks
 !.yarn/versions
 
+/dist
+
 /cookies.json
 /followed.json
 /following.json

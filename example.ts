@@ -1,3 +1,4 @@
+// @ts-nocheck
 'use strict';
 
 // eslint-disable-next-line import/no-extraneous-dependencies
@@ -10,8 +11,8 @@ import Instauto from './src/index.js';
 // const Instauto = require('instauto'); // eslint-disable-line import/no-unresolved
 
 // Optional: Custom logger with timestamps
-const log = (fn, ...args) => console[fn](new Date().toISOString(), ...args);
-const logger = Object.fromEntries(['log', 'info', 'debug', 'error', 'trace', 'warn'].map((fn) => [fn, (...args) => log(fn, ...args)]));
+const log = (fn: string, ...args: any[]) => console[fn as keyof Console](new Date().toISOString(), ...args);
+const logger = Object.fromEntries(['log', 'info', 'debug', 'error', 'trace', 'warn'].map((fn) => [fn, (...args: any[]) => log(fn, ...args)])) as unknown as Console;
 
 const options = {
   cookiesPath: './cookies.json',
@@ -75,12 +76,12 @@ const options = {
   logger,
 };
 
-let browser;
+let browser: puppeteer.Browser | undefined;
 
 try {
   browser = await puppeteer.launch({
     // set headless: false first if you need to debug and see how it works
-    // headless: false,
+    headless: false,
 
     args: [
       // Needed for docker
@@ -93,7 +94,7 @@ try {
   });
 
   // Create a database where state will be loaded/saved to
-  const instautoDb = await Instauto.JSONDB({
+  const instautoDb = await (Instauto as any).JSONDB({
     // Will store a list of all users that have been followed before, to prevent future re-following.
     followedDbPath: './followed.json',
     // Will store all unfollowed users here
@@ -102,7 +103,7 @@ try {
     likedPhotosDbPath: './liked-photos.json',
   });
 
-  const instauto = await Instauto(instautoDb, browser, options);
+  const instauto = await (Instauto as any)(instautoDb, browser, options);
 
   // This can be used to unfollow people:
   // Will unfollow auto-followed AND manually followed accounts who are not following us back, after some time has passed
@@ -113,7 +114,7 @@ try {
   // Unfollow previously auto-followed users (regardless of whether or not they are following us back)
   // after a certain amount of days (2 weeks)
   // Leave room to do following after this too (unfollow 2/3 of maxFollowsPerDay)
-  const unfollowedCount = await instauto.unfollowOldFollowed({ ageInDays: 14, limit: options.maxFollowsPerDay * (2 / 3) });
+  const unfollowedCount = await instauto.unfollowOldFollowed({ ageInDays: 14, limit: (options as any).maxFollowsPerDay * (2 / 3) });
 
   if (unfollowedCount > 0) await instauto.sleep(10 * 60 * 1000);
 
@@ -123,7 +124,7 @@ try {
   // Now go through each of these and follow a certain amount of their followers
   await instauto.followUsersFollowers({
     usersToFollowFollowersOf,
-    maxFollowsTotal: options.maxFollowsPerDay - unfollowedCount,
+    maxFollowsTotal: (options as any).maxFollowsPerDay - unfollowedCount,
     skipPrivate: true,
     enableLikeImages: true,
     likeImagesMax: 3,

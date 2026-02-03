@@ -1,16 +1,24 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import keyBy from 'lodash/keyBy.js';
 
+type FollowedUser = { username: string; time: number; failed?: boolean; noActionTaken?: boolean };
+type LikedPhoto = { username: string; href: string; time: number };
+
 export default async function JSONDB({
   followedDbPath,
   unfollowedDbPath,
   likedPhotosDbPath,
 
   logger = console,
+}: {
+  followedDbPath: string;
+  unfollowedDbPath: string;
+  likedPhotosDbPath: string;
+  logger?: Console;
 }) {
-  let prevFollowedUsers = {};
-  let prevUnfollowedUsers = {};
-  let prevLikedPhotos = [];
+  let prevFollowedUsers: Record<string, FollowedUser> = {};
+  let prevUnfollowedUsers: Record<string, FollowedUser> = {};
+  let prevLikedPhotos: LikedPhoto[] = [];
 
   async function trySaveDb() {
     try {
@@ -48,12 +56,12 @@ export default async function JSONDB({
     return getPrevLikedPhotos().length; // TODO performance
   }
 
-  function getLikedPhotosLastTimeUnit(timeUnit) {
+  function getLikedPhotosLastTimeUnit(timeUnit: number) {
     const now = new Date().getTime();
     return getPrevLikedPhotos().filter((u) => now - u.time < timeUnit);
   }
 
-  async function addLikedPhoto({ username, href, time }) {
+  async function addLikedPhoto({ username, href, time }: LikedPhoto) {
     prevLikedPhotos.push({ username, href, time });
     await trySaveDb();
   }
@@ -66,17 +74,16 @@ export default async function JSONDB({
     return getPrevFollowedUsers().length; // TODO performance
   }
 
-
-  function getFollowedLastTimeUnit(timeUnit) {
+  function getFollowedLastTimeUnit(timeUnit: number) {
     const now = new Date().getTime();
     return getPrevFollowedUsers().filter((u) => now - u.time < timeUnit);
   }
 
-  function getPrevFollowedUser(username) {
+  function getPrevFollowedUser(username: string) {
     return prevFollowedUsers[username];
   }
 
-  async function addPrevFollowedUser(user) {
+  async function addPrevFollowedUser(user: FollowedUser) {
     prevFollowedUsers[user.username] = user;
     await trySaveDb();
   }
@@ -89,12 +96,12 @@ export default async function JSONDB({
     return getPrevUnfollowedUsers().length; // TODO performance
   }
 
-  function getUnfollowedLastTimeUnit(timeUnit) {
+  function getUnfollowedLastTimeUnit(timeUnit: number) {
     const now = new Date().getTime();
     return getPrevUnfollowedUsers().filter((u) => now - u.time < timeUnit);
   }
 
-  async function addPrevUnfollowedUser(user) {
+  async function addPrevUnfollowedUser(user: FollowedUser) {
     prevUnfollowedUsers[user.username] = user;
     await trySaveDb();
   }
