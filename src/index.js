@@ -1,7 +1,5 @@
-'use strict';
-
 import assert from 'assert';
-import fs from 'fs-extra';
+import { readFile, writeFile, unlink } from 'node:fs/promises';
 import { join } from 'path';
 import UserAgent from 'user-agents';
 import JSONDB from './db.js'; // eslint-disable-line import/extensions
@@ -100,7 +98,7 @@ const Instauto = async (db, browser, options) => {
 
   async function tryLoadCookies() {
     try {
-      const cookies = JSON.parse(await fs.readFile(cookiesPath));
+      const cookies = JSON.parse(await readFile(cookiesPath, 'utf8'));
       for (const cookie of cookies) {
         if (cookie.name !== 'ig_lang') await page.setCookie(cookie);
       }
@@ -114,7 +112,7 @@ const Instauto = async (db, browser, options) => {
       logger.log('Saving cookies');
       const cookies = await page.cookies();
 
-      await fs.writeFile(cookiesPath, JSON.stringify(cookies, null, 2));
+      await writeFile(cookiesPath, JSON.stringify(cookies, null, 2));
     } catch (err) {
       logger.error('Failed to save cookies');
     }
@@ -123,7 +121,7 @@ const Instauto = async (db, browser, options) => {
   async function tryDeleteCookies() {
     try {
       logger.log('Deleting cookies');
-      await fs.unlink(cookiesPath);
+      await unlink(cookiesPath);
     } catch (err) {
       logger.error('No cookies to delete');
     }

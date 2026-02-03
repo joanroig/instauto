@@ -1,6 +1,4 @@
-'use strict';
-
-import fs from 'fs-extra';
+import { readFile, writeFile } from 'node:fs/promises';
 import keyBy from 'lodash/keyBy.js';
 
 export default async function JSONDB({
@@ -16,9 +14,9 @@ export default async function JSONDB({
 
   async function trySaveDb() {
     try {
-      await fs.writeFile(followedDbPath, JSON.stringify(Object.values(prevFollowedUsers)));
-      await fs.writeFile(unfollowedDbPath, JSON.stringify(Object.values(prevUnfollowedUsers)));
-      await fs.writeFile(likedPhotosDbPath, JSON.stringify(prevLikedPhotos));
+      await writeFile(followedDbPath, JSON.stringify(Object.values(prevFollowedUsers)));
+      await writeFile(unfollowedDbPath, JSON.stringify(Object.values(prevUnfollowedUsers)));
+      await writeFile(likedPhotosDbPath, JSON.stringify(prevLikedPhotos));
     } catch (err) {
       logger.error('Failed to save database');
     }
@@ -26,17 +24,17 @@ export default async function JSONDB({
 
   async function tryLoadDb() {
     try {
-      prevFollowedUsers = keyBy(JSON.parse(await fs.readFile(followedDbPath)), 'username');
+      prevFollowedUsers = keyBy(JSON.parse(await readFile(followedDbPath, 'utf8')), 'username');
     } catch (err) {
       logger.warn('No followed database found');
     }
     try {
-      prevUnfollowedUsers = keyBy(JSON.parse(await fs.readFile(unfollowedDbPath)), 'username');
+      prevUnfollowedUsers = keyBy(JSON.parse(await readFile(unfollowedDbPath, 'utf8')), 'username');
     } catch (err) {
       logger.warn('No unfollowed database found');
     }
     try {
-      prevLikedPhotos = JSON.parse(await fs.readFile(likedPhotosDbPath));
+      prevLikedPhotos = JSON.parse(await readFile(likedPhotosDbPath, 'utf8'));
     } catch (err) {
       logger.warn('No likes database found');
     }
