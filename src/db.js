@@ -1,15 +1,15 @@
 'use strict';
 
-const fs = require('fs-extra');
-const keyBy = require('lodash/keyBy');
+import fs from 'fs-extra';
+import keyBy from 'lodash/keyBy.js';
 
-module.exports = async ({
+export default async function JSONDB({
   followedDbPath,
   unfollowedDbPath,
   likedPhotosDbPath,
 
   logger = console,
-}) => {
+}) {
   let prevFollowedUsers = {};
   let prevUnfollowedUsers = {};
   let prevLikedPhotos = [];
@@ -52,7 +52,7 @@ module.exports = async ({
 
   function getLikedPhotosLastTimeUnit(timeUnit) {
     const now = new Date().getTime();
-    return getPrevLikedPhotos().filter(u => now - u.time < timeUnit);
+    return getPrevLikedPhotos().filter((u) => now - u.time < timeUnit);
   }
 
   async function addLikedPhoto({ username, href, time }) {
@@ -71,7 +71,7 @@ module.exports = async ({
 
   function getFollowedLastTimeUnit(timeUnit) {
     const now = new Date().getTime();
-    return getPrevFollowedUsers().filter(u => now - u.time < timeUnit);
+    return getPrevFollowedUsers().filter((u) => now - u.time < timeUnit);
   }
 
   function getPrevFollowedUser(username) {
@@ -93,7 +93,7 @@ module.exports = async ({
 
   function getUnfollowedLastTimeUnit(timeUnit) {
     const now = new Date().getTime();
-    return getPrevUnfollowedUsers().filter(u => now - u.time < timeUnit);
+    return getPrevUnfollowedUsers().filter((u) => now - u.time < timeUnit);
   }
 
   async function addPrevUnfollowedUser(user) {
@@ -119,4 +119,4 @@ module.exports = async ({
     getTotalUnfollowedUsers,
     getTotalLikedPhotos,
   };
-};
+}

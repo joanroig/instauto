@@ -1,10 +1,10 @@
 'use strict';
 
-const assert = require('assert');
-const fs = require('fs-extra');
-const { join } = require('path');
-const UserAgent = require('user-agents');
-const JSONDB = require('./db');
+import assert from 'assert';
+import fs from 'fs-extra';
+import { join } from 'path';
+import UserAgent from 'user-agents';
+import JSONDB from './db.js'; // eslint-disable-line import/extensions
 
 // NOTE duplicated inside puppeteer page
 function shuffleArray(arrayIn) {
@@ -1214,4 +1214,4 @@ const Instauto = async (db, browser, options) => {
 
 Instauto.JSONDB = JSONDB;
 
-module.exports = Instauto;
+export default Instauto;

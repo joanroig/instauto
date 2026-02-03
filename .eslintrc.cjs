@@ -4,7 +4,7 @@ module.exports = {
   },
   extends: 'airbnb-base',
   parserOptions: {
-    sourceType: 'script',
+    sourceType: 'module',
     ecmaVersion: 2022,
   },
   globals: {
@@ -12,6 +12,7 @@ module.exports = {
     document: true,
   },
   rules: {
+    'import/extensions': 0,
     'max-len': 0,
     'arrow-parens': 0,
     'no-console': 0,
