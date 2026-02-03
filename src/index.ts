@@ -1254,9 +1254,9 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
 
   await setEnglishLang(false);
 
-  await tryPressButton(await getXpathElement('//button[contains(text(), "Accept")]', { timeout: 1000 }), 'Accept cookies dialog');
-  await tryPressButton(await getXpathElement('//button[contains(text(), "Only allow essential cookies")]', { timeout: 1000 }), 'Accept cookies dialog 2 button 1', 10000);
-  await tryPressButton(await getXpathElement('//button[contains(text(), "Allow essential and optional cookies")]', { timeout: 1000 }), 'Accept cookies dialog 2 button 2', 10000);
+  await tryPressButton(await getXpathElement('//button[contains(text(), "Accept")]', { timeout: 1000 }), 'Accept cookies dialog', 10000);
+  await tryPressButton(await getXpathElement('//button[contains(text(), "Only allow essential cookies")]', { timeout: 100 }), 'Accept cookies dialog 2 button 1', 10000);
+  await tryPressButton(await getXpathElement('//button[contains(text(), "Allow essential and optional cookies")]', { timeout: 100 }), 'Accept cookies dialog 2 button 2', 10000);
 
   if (!(await isLoggedIn())) {
     if (!myUsername || !password) {

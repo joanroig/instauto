@@ -2,19 +2,15 @@
 
 [![Discord](https://img.shields.io/discord/986052713425027072)](https://discord.gg/Rh3KT9zyhj) [![PayPal](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://paypal.me/mifino/usd)
 
-instauto is an Instagram automation/bot library (API) written in modern, clean javascript using Google's Puppeteer. Goal is to be very easy to set up, use, and extend, and obey instagram's limits. Heavily inspired by [InstaPy](https://github.com/timgrossmann/InstaPy), but I thought it was way too heavy and hard to setup.
+instauto is an Instagram automation/bot library (API) written in TypeScript using Puppeteer. Goal is to be very easy to set up, use, and extend, and obey instagram's limits. Heavily inspired by [InstaPy](https://github.com/timgrossmann/InstaPy), but I thought it was way too heavy and hard to setup.
 
 There is also a GUI application for those who don't want to code: [SimpleInstaBot](https://mifi.github.io/SimpleInstaBot/)
 
-
 ## Setup
 
-- First install [Node.js](https://nodejs.org/en/) 8 or newer.
-  - On MacOS, it's recommended to use [homebrew](https://brew.sh/): `brew install node`
-
-- Create a new directory with a file like [example.js](https://github.com/mifi/instauto/blob/master/example.js)
-
-- Adjust your `example.js` to your needs. If you want to see how it would work without doing any invasive actions, use the `dryRun: true` option. Toggle `headless` to see it in action.
+1. First install [Node.js](https://nodejs.org/en/)
+2. Create a new directory with a file like [example.ts](https://github.com/mifi/instauto/blob/master/example.ts)
+3. Adjust your `example.ts` to your needs. If you want to see how it would work without doing any invasive actions, use the `dryRun: true` option. Toggle `headless` to see it in action.
 
 - Open a terminal in the directory
 
@@ -26,7 +22,7 @@ There is also a GUI application for those who don't want to code: [SimpleInstaBo
 
 You can run this code for example once every day using cron or pm2 or similar
 
-See [index.js](https://github.com/mifi/instauto/blob/master/src/index.js) for available options.
+See [index.ts](https://github.com/mifi/instauto/blob/master/src/index.ts) for available options.
 
 ## Supported functionality
 
@@ -38,7 +34,7 @@ See [index.js](https://github.com/mifi/instauto/blob/master/src/index.js) for av
 
 - The code automatically prevents breaching 100 follow/unfollows per hour or 700 per 24hr, to prevent bans. This can be configured.
 
-See [example.js](https://github.com/mifi/instauto/blob/master/example.js) for example of features
+See [example.ts](https://github.com/mifi/instauto/blob/master/example.ts) for example of features
 
 ## Tips
 - Run this on a machine with a non-cloud IP to avoid being banned
@@ -68,7 +64,8 @@ See also:
 Also you might want to install the more lightweight package `puppeteer-core` instead of `puppeteer`.
 
 ## Running with pm2
-First install [pm2](https://github.com/Unitech/pm2). (`npm i -g pm2`) Then copy [instabot.yml](https://github.com/mifi/instauto/blob/master/instabot.yml) into the same dir as `example.js` and run:
+
+First install [pm2](https://github.com/Unitech/pm2). (`npm i -g pm2`) Then copy [instabot.yml](https://github.com/mifi/instauto/blob/master/instabot.yml) into the same dir as `example.ts` and run:
 
 ```bash
 pm2 start instabot.yml
