@@ -1272,7 +1272,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
     }
 
     // Mobile version https://github.com/mifi/SimpleInstaBot/issues/7
-    await tryPressButton(await getXpathElement('//button[contains(text(), "Log In")]'), 'Login form button');
+    await tryPressButton(await getXpathElement('//button[contains(text(), "Log In")]', { timeout: 1000 }), 'Login form button');
 
     await page.type('input[name="username"]', myUsername, { delay: 50 });
     await sleep(1000);
@@ -1308,12 +1308,12 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
     await setEnglishLang(true);
 
     // Mobile version https://github.com/mifi/SimpleInstaBot/issues/7
-    await tryPressButton(await getXpathElement('//button[contains(text(), "Save Info")]'), 'Login info dialog: Save Info');
+    await tryPressButton(await getXpathElement('//button[contains(text(), "Save Info")]', { timeout: 1000 }), 'Login info dialog: Save Info');
     // May sometimes be "Save info" too? https://github.com/mifi/instauto/pull/70
-    await tryPressButton(await getXpathElement('//button[contains(text(), "Save info")]'), 'Login info dialog: Save info');
+    await tryPressButton(await getXpathElement('//button[contains(text(), "Save info")]', { timeout: 1000 }), 'Login info dialog: Save info');
   }
 
-  await tryPressButton(await getXpathElement('//button[contains(text(), "Not Now")]'), 'Turn on Notifications dialog');
+  await tryPressButton(await getXpathElement('//button[contains(text(), "Not Now")]', { timeout: 1000 }), 'Turn on Notifications dialog');
 
   await trySaveCookies();
 
@@ -1346,7 +1346,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
       if (!userData) throw new Error('Unable to resolve user id');
       const { id: userId } = userData;
 
-      const elementHandle = await getXpathElement("//a[contains(.,' following')][contains(@href,'/following')]");
+      const elementHandle = await getXpathElement("//a[contains(.,' following')][contains(@href,'/following')]", { timeout: 1000 });
       if (elementHandle == null) throw new Error('Following button not found');
 
       if (!userId) throw new Error('Unable to resolve user id');
