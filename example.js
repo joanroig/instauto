@@ -1,5 +1,7 @@
 'use strict';
 
+require('dotenv').config();
+
 const puppeteer = require('puppeteer'); // eslint-disable-line import/no-extraneous-dependencies
 
 const Instauto = require('.');
