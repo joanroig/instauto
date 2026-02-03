@@ -1,5 +1,3 @@
-'use strict';
-
 // eslint-disable-next-line import/no-extraneous-dependencies
 import 'dotenv/config';
 
@@ -12,6 +10,7 @@ import Instauto, { JSONDB, type InstautoOptions } from './src/index.ts';
 // Optional: Custom logger with timestamps
 type LoggerMethodName = 'log' | 'info' | 'debug' | 'error' | 'trace' | 'warn';
 
+// eslint-disable-next-line no-console
 const log = (fn: LoggerMethodName, ...args: unknown[]) => console[fn](new Date().toISOString(), ...args);
 const logger = {
   log: (...args: unknown[]) => log('log', ...args),
@@ -39,7 +38,7 @@ const options: InstautoOptions = {
   // Don't follow users that have a followers / following ratio less than this:
   followUserRatioMin: process.env['FOLLOW_USER_RATIO_MIN'] != null ? parseFloat(process.env['FOLLOW_USER_RATIO_MIN']) : 0.2,
   // Don't follow users that have a followers / following ratio higher than this:
-  followUserRatioMax: process.env['FOLLOW_USER_RATIO_MAX'] != null ? parseFloat(process.env['FOLLOW_USER_RATIO_MAX']) : 4.0,
+  followUserRatioMax: process.env['FOLLOW_USER_RATIO_MAX'] != null ? parseFloat(process.env['FOLLOW_USER_RATIO_MAX']) : 4,
   // Don't follow users who have more followers than this:
   followUserMaxFollowers: null,
   // Don't follow users who have more people following them than this:

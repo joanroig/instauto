@@ -1,38 +1,36 @@
-import assert from 'assert';
+import assert from 'node:assert';
 import { readFile, writeFile, unlink } from 'node:fs/promises';
-import { join } from 'path';
+import { join } from 'node:path';
 import UserAgent from 'user-agents';
-import JSONDB, { type FollowedUser, type JSONDBInstance } from './db.ts'; // eslint-disable-line import/extensions
 import type { Browser, ElementHandle, Page, WaitForSelectorOptions } from 'puppeteer';
+import { type FollowedUser, type JSONDBInstance } from './db.ts'; // eslint-disable-line import/extensions
 
-
-export { JSONDB };
 
 type Logger = Pick<Console, 'log' | 'info' | 'debug' | 'error' | 'trace' | 'warn'>;
 
 declare global {
+  // override window:
   interface Window {
-    instautoSleep(ms: number): Promise<void>
-    instautoSleep(ms: number): Promise<void>
-    instautoLog(...args: unknown[]): void
-    instautoOnImageLiked(href: string): void
+    instautoSleep: (ms: number) => Promise<void>,
+    instautoLog: (...args: unknown[]) => void
+    instautoOnImageLiked: (href: string) => void
     _sharedData?: { config?: { viewer?: { username?: string } } };
   }
 }
 
 type LikeMediaType = 'image' | 'video' | 'unknown';
 
-type LikeMediaData = {
+interface LikeMediaData {
   mediaType: LikeMediaType;
   mediaDesc: string;
   src?: string | undefined;
   alt?: string | undefined;
   poster?: string | undefined;
-};
+}
 
 type ShouldLikeMedia = (data: LikeMediaData) => boolean;
 
-type ShouldFollowUserData = {
+interface ShouldFollowUserData {
   username: string;
   isVerified: boolean;
   isBusinessAccount: boolean;
@@ -43,11 +41,11 @@ type ShouldFollowUserData = {
   externalUrl: string | null;
   businessCategoryName: string | null;
   categoryName: string | null;
-};
+}
 
 type ShouldFollowUser = (data: ShouldFollowUserData) => boolean;
 
-export type InstautoOptions = {
+export interface InstautoOptions {
   instagramBaseUrl?: string;
   cookiesPath: string;
   username?: string;
@@ -72,23 +70,23 @@ export type InstautoOptions = {
   screenshotOnError?: boolean;
   screenshotsPath?: string;
   logger?: Logger;
-};
+}
 
-type LikeUserImagesOptions = {
+interface LikeUserImagesOptions {
   username?: string | undefined;
   likeImagesMin?: number | undefined;
   likeImagesMax?: number | undefined;
-};
+}
 
-type ProcessUserFollowersOptions = {
+interface ProcessUserFollowersOptions {
   maxFollowsPerUser?: number | undefined;
   skipPrivate?: boolean | undefined;
   enableLikeImages?: boolean | undefined;
   likeImagesMin?: number | undefined;
   likeImagesMax?: number | undefined;
-};
+}
 
-type ProcessUsersFollowersOptions = {
+interface ProcessUsersFollowersOptions {
   usersToFollowFollowersOf: string[];
   maxFollowsTotal?: number | undefined;
   skipPrivate?: boolean | undefined;
@@ -96,33 +94,33 @@ type ProcessUsersFollowersOptions = {
   enableLikeImages?: boolean | undefined;
   likeImagesMin?: number | undefined;
   likeImagesMax?: number | undefined;
-};
+}
 
-type UnfollowOptions = {
+interface UnfollowOptions {
   limit?: number | undefined;
-};
+}
 
-type UnfollowOldOptions = {
+interface UnfollowOldOptions {
   ageInDays?: number | undefined;
   limit?: number | undefined;
-};
+}
 
-type FollowUserRestrictions = {
+interface FollowUserRestrictions {
   username: string;
   skipPrivate?: boolean | undefined;
-};
+}
 
-type SafelyFollowUserListOptions = {
+interface SafelyFollowUserListOptions {
   users: string[];
   skipPrivate?: boolean | undefined;
   limit?: number | undefined;
-};
+}
 
-type GraphqlPageInfo = { end_cursor: string | null; has_next_page: boolean };
-type GraphqlEdge = { node: { username: string } };
-type GraphqlUserList = { edges: GraphqlEdge[]; page_info: GraphqlPageInfo };
+interface GraphqlPageInfo { end_cursor: string | null; has_next_page: boolean }
+interface GraphqlEdge { node: { username: string } }
+interface GraphqlUserList { edges: GraphqlEdge[]; page_info: GraphqlPageInfo }
 
-type GraphqlJson = {
+interface GraphqlJson {
   data: {
     user?: {
       edge_followed_by?: GraphqlUserList;
@@ -132,21 +130,21 @@ type GraphqlJson = {
       edge_liked_by?: GraphqlUserList;
     };
   };
-};
+}
 
-type GraphqlVariables = {
+interface GraphqlVariables {
   first?: number;
   after?: string | null;
   [key: string]: string | number | boolean | null | undefined;
-};
+}
 
-type GraphqlQueryUsersOptions = {
+interface GraphqlQueryUsersOptions {
   queryHash: string;
   getResponseProp: (json: GraphqlJson) => GraphqlUserList | undefined;
   graphqlVariables: GraphqlVariables;
-};
+}
 
-type InstagramUser = {
+interface InstagramUser {
   id: string;
   username?: string;
   edge_followed_by: { count: number };
@@ -161,9 +159,9 @@ type InstagramUser = {
   external_url: string | null;
   business_category_name: string | null;
   category_name: string | null;
-};
+}
 
-export type InstautoApi = {
+export interface InstautoApi {
   followUserFollowers: (username: string, options?: ProcessUserFollowersOptions) => Promise<void>;
   unfollowNonMutualFollowers: (options?: UnfollowOptions) => Promise<number>;
   unfollowAllUnknown: (options?: UnfollowOptions) => Promise<number>;
@@ -181,7 +179,7 @@ export type InstautoApi = {
   followUsersFollowers: (options: ProcessUsersFollowersOptions) => Promise<void>;
   doesUserFollowMe: (username: string) => Promise<boolean | undefined>;
   navigateToUserAndGetData: (username: string) => Promise<InstagramUser | undefined>;
-};
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -244,7 +242,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
     maxLikesPerDay = 50,
 
     followUserRatioMin = 0.2,
-    followUserRatioMax = 4.0,
+    followUserRatioMax = 4,
     followUserMaxFollowers = null,
     followUserMaxFollowing = null,
     followUserMinFollowers = null,
@@ -286,7 +284,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
   async function takeScreenshot() {
     if (!screenshotOnError) return;
     try {
-      const fileName = `${new Date().getTime()}.jpg`;
+      const fileName = `${Date.now()}.jpg`;
       logger.log('Taking screenshot', fileName);
       await page.screenshot({ path: join(screenshotsPath, fileName), type: 'jpeg', quality: 30 });
     } catch (err) {
@@ -300,7 +298,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
       for (const cookie of cookies) {
         if (cookie.name !== 'ig_lang') await page.setCookie(cookie);
       }
-    } catch (err) {
+    } catch {
       logger.error('No cookies found');
     }
   }
@@ -311,7 +309,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
       const cookies = await page.cookies();
 
       await writeFile(cookiesPath, JSON.stringify(cookies, null, 2));
-    } catch (err) {
+    } catch {
       logger.error('Failed to save cookies');
     }
   }
@@ -320,7 +318,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
     try {
       logger.log('Deleting cookies');
       await unlink(cookiesPath);
-    } catch (err) {
+    } catch {
       logger.error('No cookies to delete');
     }
   }
@@ -335,11 +333,11 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
   };
 
   async function onImageLiked({ username, href }: { username: string; href: string }) {
-    await addLikedPhoto({ username, href, time: new Date().getTime() });
+    await addLikedPhoto({ username, href, time: Date.now() });
   }
 
   function getNumFollowedUsersThisTimeUnit(timeUnit: number) {
-    const now = new Date().getTime();
+    const now = Date.now();
 
     return getPrevFollowedUsers().filter((u) => now - u.time < timeUnit).length
       + getPrevUnfollowedUsers().filter((u) => !u.noActionTaken && now - u.time < timeUnit).length;
@@ -375,7 +373,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
   function haveRecentlyFollowedUser(username: string) {
     const followedUserEntry = getPrevFollowedUser(username);
     if (!followedUserEntry) return false; // We did not previously follow this user, so don't know
-    return new Date().getTime() - followedUserEntry.time < dontUnfollowUntilTimeElapsed;
+    return Date.now() - followedUserEntry.time < dontUnfollowUntilTimeElapsed;
   }
 
   // See https://github.com/mifi/SimpleInstaBot/issues/140#issuecomment-1149105387
@@ -413,6 +411,17 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
     return (page.url().replace(/\/$/, '') === url.replace(/\/$/, ''));
   }
 
+  // How to test xpaths in the browser:
+  // document.evaluate("your xpath", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null ).singleNodeValue
+  async function getXpathElement(xpath: string, opts?: WaitForSelectorOptions): Promise<ElementHandle | null> {
+    try {
+      return await page.waitForSelector(`::-p-xpath(${xpath})`, opts);
+    } catch {
+      logger.debug(`Element not found for xpath: ${xpath}`);
+      return null;
+    }
+  }
+
   async function navigateToUser(username: string) {
     if (isAlreadyOnUserPage(username)) return true;
 
@@ -432,7 +441,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
       // https://github.com/mifi/SimpleInstaBot/issues/48
       // example: https://www.instagram.com/victorialarson__/
       // so we check if the page has the user's name on it
-      const elementHandle = await getXpathElement(`//body//main//*[contains(text(),${escapeXpathStr(username)})]`);
+      const elementHandle = await getXpathElement(`//body//main//*[contains(text(),${escapeXpathStr(username)})]`, { timeout: 1000 });
       const foundUsernameOnPage = elementHandle != null;
       if (!foundUsernameOnPage) logger.warn(`Cannot find text "${username}" on page`);
       return foundUsernameOnPage;
@@ -474,16 +483,16 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
             const outerParsed: unknown = JSON.parse(q);
             // eslint-disable-next-line no-underscore-dangle
             if (!isRecord(outerParsed)) return undefined;
-            const data = outerParsed['data'];
+            const { data } = outerParsed;
             if (!isRecord(data)) return undefined;
             const bbox = data['__bbox'];
             if (!isRecord(bbox)) return undefined;
-            const result = bbox['result'];
+            const { result } = bbox;
             if (!isRecord(result)) return undefined;
-            const response = result['response'];
+            const { response } = result;
             if (typeof response !== 'string') return undefined;
             q = response;
-            q = q.replace(/\\/g, '');
+            q = q.replaceAll('\\', '');
             const innerParsed: unknown = JSON.parse(q);
             if (!isRecord(innerParsed)) return undefined;
             const innerData = innerParsed['data'];
@@ -531,9 +540,9 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
         const jsonText = await foundResponse.text();
         const jsonParsed: unknown = JSON.parse(jsonText);
         if (!isRecord(jsonParsed)) return undefined;
-        const data = jsonParsed['data'];
+        const { data } = jsonParsed;
         if (!isRecord(data)) return undefined;
-        const user = data['user'];
+        const { user } = data;
         if (!isInstagramUser(user)) return undefined;
         return user;
       } finally {
@@ -567,19 +576,8 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
     assert(pre);
     const textContentHandle = await pre.getProperty('textContent');
     const textContentValue = await textContentHandle.jsonValue();
-    assert(typeof textContentValue === 'string')
+    assert(typeof textContentValue === 'string');
     return JSON.parse(textContentValue) as GraphqlJson;
-  }
-
-  // How to test xpaths in the browser:
-  // document.evaluate("your xpath", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null ).singleNodeValue
-  async function getXpathElement(xpath: string, opts?: WaitForSelectorOptions): Promise<ElementHandle | null> {
-    try {
-      return await page.waitForSelector(`::-p-xpath(${xpath})`, opts);
-    } catch (err) {
-      logger.debug(`Element not found for xpath: ${xpath}`);
-      return null;
-    }
   }
 
   async function isActionBlocked() {
@@ -681,7 +679,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
       const elementHandle2 = await findUnfollowButton();
 
       // Don't want to retry this user over and over in case there is an issue https://github.com/mifi/instauto/issues/33#issuecomment-723217177
-      const entry: FollowedUser = { username, time: new Date().getTime(), ...(elementHandle2 ? {} : { failed: true }) };
+      const entry: FollowedUser = { username, time: Date.now(), ...(elementHandle2 ? {} : { failed: true }) };
 
       await addPrevFollowedUser(entry);
 
@@ -701,19 +699,19 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
     await navigateToUserAndGetData(username);
     logger.log(`Unfollowing user ${username}`);
 
-      const res: FollowedUser = { username, time: new Date().getTime() };
+    const res: FollowedUser = { username, time: Date.now() };
 
     const elementHandle = await findUnfollowButton();
-      if (!elementHandle) {
-        const elementHandle2 = await findFollowButton();
-        if (elementHandle2) {
-          logger.log('User has been unfollowed already');
-          res.noActionTaken = true;
-        } else {
-          logger.log('Failed to find unfollow button');
-          res.noActionTaken = true;
-        }
+    if (!elementHandle) {
+      const elementHandle2 = await findFollowButton();
+      if (elementHandle2) {
+        logger.log('User has been unfollowed already');
+        res.noActionTaken = true;
+      } else {
+        logger.log('Failed to find unfollow button');
+        res.noActionTaken = true;
       }
+    }
 
     if (!dryRun) {
       if (elementHandle) {
@@ -738,7 +736,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
     return res;
   }
 
-  const isLoggedIn = async () => (await getXpathElement('//*[@aria-label="Home"]'), { timeout: 1000 }) != null;
+  const isLoggedIn = async () => await getXpathElement('//*[@aria-label="Home"]', { timeout: 1000 }) != null;
 
   async function* graphqlQueryUsers({ queryHash, getResponseProp, graphqlVariables: graphqlVariablesIn }: GraphqlQueryUsersOptions): AsyncGenerator<string[], string[], void> {
     const graphqlUrl = `${instagramBaseUrl}/graphql/query/?query_hash=${queryHash}`;
@@ -811,7 +809,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
 
   /* eslint-disable no-undef */
   async function likeCurrentUserImagesPageCode({ dryRun: dryRunIn, likeImagesMin, likeImagesMax, shouldLikeMedia: shouldLikeMediaIn }: { dryRun: boolean; likeImagesMin: number; likeImagesMax: number; shouldLikeMedia: ShouldLikeMedia | null }) {
-    const allImages = Array.from(document.getElementsByTagName('a')).filter((el) => typeof el.href === 'string' && /instagram.com\/p\//.test(el.href));
+    const allImages = [...document.getElementsByTagName('a')].filter((el) => typeof el.href === 'string' && /instagram.com\/p\//.test(el.href));
 
     // eslint-disable-next-line no-shadow
     function shuffleArray<T>(arrayIn: T[]): T[] {
@@ -836,7 +834,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
 
     const images = imagesShuffled.slice(0, numImagesToLike);
 
-    if (images.length < 1) {
+    if (images.length === 0) {
       window.instautoLog('No images to like');
       return;
     }
@@ -850,7 +848,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
 
       if (!dialog) throw new Error('Dialog not found');
 
-      const section = Array.from(dialog.querySelectorAll('section')).find((s) => s.querySelectorAll('*[aria-label="Like"]')[0] && s.querySelectorAll('*[aria-label="Comment"]')[0]);
+      const section = [...dialog.querySelectorAll('section')].find((s) => s.querySelectorAll('*[aria-label="Like"]')[0] && s.querySelectorAll('*[aria-label="Comment"]')[0]);
 
       if (!section) throw new Error('Like button section not found');
 
@@ -870,9 +868,9 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
         return undefined;
       }
 
-    const foundClickable = findClickableParent(likeButtonChild);
+      const foundClickable = findClickableParent(likeButtonChild);
 
-    if (!foundClickable) throw new Error('Like button not found');
+      if (!foundClickable) throw new Error('Like button not found');
 
       const instautoLog2 = window.instautoLog;
 
@@ -949,10 +947,8 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
     try {
       await page.exposeFunction('instautoSleep', (...args: Parameters<typeof window['instautoSleep']>) => sleep(...args));
       await page.exposeFunction('instautoLog', (...args: Parameters<typeof window['instautoLog']>) => console.log(...args));
-      await page.exposeFunction('instautoOnImageLiked', (href: Parameters<typeof window['instautoOnImageLiked']>[0]) => {
-        return onImageLiked({ username, href });
-      });
-    } catch (err) {
+      await page.exposeFunction('instautoOnImageLiked', (href: Parameters<typeof window['instautoOnImageLiked']>[0]) => onImageLiked({ username, href }));
+    } catch {
       // Ignore already exists error
     }
 
@@ -994,7 +990,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
       logger.log('User has too many followers compared to follows or opposite, skipping');
       return false;
     }
-    if (shouldFollowUser !== null && (typeof shouldFollowUser === 'function' && !shouldFollowUser({ username, isVerified, isBusinessAccount, isProfessionalAccount, fullName, biography, profilePicUrlHd, externalUrl, businessCategoryName, categoryName }) === true)) {
+    if (shouldFollowUser !== null && (typeof shouldFollowUser === 'function' && shouldFollowUser({ username, isVerified, isBusinessAccount, isProfessionalAccount, fullName, biography, profilePicUrlHd, externalUrl, businessCategoryName, categoryName }) !== true)) {
       logger.log(`Custom follow logic returned false for ${username}, skipping`);
       return false;
     }
@@ -1090,14 +1086,14 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
       const list = Array.isArray(listOrUsername) ? listOrUsername : [listOrUsername];
 
       for (const username of list) {
-          if (await condition(username)) {
+        if (await condition(username)) {
           try {
             const userFound = await navigateToUser(username);
 
             if (!userFound) {
               // to avoid repeatedly unfollowing failed users, flag them as already unfollowed
               logger.log('User not found for unfollow');
-              await addPrevUnfollowedUser({ username, time: new Date().getTime(), noActionTaken: true });
+              await addPrevUnfollowedUser({ username, time: Date.now(), noActionTaken: true });
               await sleep(3000);
             } else {
               const { noActionTaken } = await unfollowUser(username);
@@ -1180,11 +1176,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
 
       // when logged in, we need to go to account in order to be able to check/set language
       // (need to see the footer)
-      if (assumeLoggedIn) {
-        await gotoUrl(`${instagramBaseUrl}/accounts/edit/`);
-      } else {
-        await goHome();
-      }
+      await (assumeLoggedIn ? gotoUrl(`${instagramBaseUrl}/accounts/edit/`) : goHome());
       await sleep(3000);
       const selectElement = await getXpathElement(`//select[//option[@value='${short}' and text()='${long}']]`, { timeout: 1000 });
       if (!selectElement) throw new Error('Language selector not found');
@@ -1242,7 +1234,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
         elementHandle.click();
         await sleep(sleepMs);
       }
-    } catch (err) {
+    } catch {
       logger.warn(`Failed to press button: ${name}`);
     }
   }
@@ -1275,7 +1267,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
     try {
       await page.click('a[href="/accounts/login/?source=auth_switcher"]');
       await sleep(1000);
-    } catch (err) {
+    } catch {
       logger.info('No login page button, assuming we are on login form');
     }
 
@@ -1341,9 +1333,9 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
     throw new Error('Don\'t know what\'s my username');
   }
 
-    const me = await navigateToUserAndGetData(myUsername);
-    if (!me) throw new Error('Failed to load my user data');
-    const { id: myUserId } = me;
+  const me = await navigateToUserAndGetData(myUsername);
+  if (!me) throw new Error('Failed to load my user data');
+  const { id: myUserId } = me;
 
   // --- END OF INITIALIZATION
 
@@ -1370,7 +1362,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
       const responseText = await foundResponse.text();
       const parsed: unknown = JSON.parse(responseText);
       if (!isRecord(parsed) || !Array.isArray(parsed['users'])) throw new Error('Invalid follow response');
-      const users = parsed['users'];
+      const { users } = parsed;
       if (users.length < 2) throw new Error('Unable to find user follows list');
       // console.log(users, myUserId);
       return users.some((user) => isRecord(user) && (String(user['pk']) === String(myUserId) || user['username'] === myUsername)); // If they follow us, we will show at the top of the list
@@ -1440,7 +1432,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
       const previous = getPrevFollowedUser(username);
       if (!previous) return false;
       if (excludeUsers.includes(username)) return false;
-      return (new Date().getTime() - previous.time) / (1000 * 60 * 60 * 24) > ageInDaysResolved;
+      return (Date.now() - previous.time) / (1000 * 60 * 60 * 24) > ageInDaysResolved;
     }
 
     return safelyUnfollowUserList(followingUsersGenerator, limit, condition);
@@ -1452,7 +1444,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
       getFollowers: false,
     });
 
-    return allFollowing.filter(u => !getPrevFollowedUser(u) && !excludeUsers.includes(u));
+    return allFollowing.filter((u) => !getPrevFollowedUser(u) && !excludeUsers.includes(u));
   }
 
   return {
@@ -1477,3 +1469,5 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
 };
 
 export default Instauto;
+
+export { default as JSONDB } from './db.ts';
