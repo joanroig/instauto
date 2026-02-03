@@ -1,8 +1,8 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import keyBy from 'lodash/keyBy.js';
 
-type FollowedUser = { username: string; time: number; failed?: boolean; noActionTaken?: boolean };
-type LikedPhoto = { username: string; href: string; time: number };
+export type FollowedUser = { username: string; time: number; failed?: boolean; noActionTaken?: boolean };
+export type LikedPhoto = { username: string; href: string; time: number };
 
 export default async function JSONDB({
   followedDbPath,
@@ -125,3 +125,5 @@ export default async function JSONDB({
     getTotalLikedPhotos,
   };
 }
+
+export type JSONDBInstance = Awaited<ReturnType<typeof JSONDB>>;

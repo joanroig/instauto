@@ -1,27 +1,221 @@
-// @ts-nocheck
 import assert from 'assert';
-// Provide minimal DOM globals for code that is serialized to the browser
-declare const window: any;
-declare const document: any;
 import { readFile, writeFile, unlink } from 'node:fs/promises';
 import { join } from 'path';
 import UserAgent from 'user-agents';
-import JSONDB from './db.js'; // eslint-disable-line import/extensions
+import JSONDB, { type FollowedUser, type JSONDBInstance } from './db.ts'; // eslint-disable-line import/extensions
+import type { Browser, ElementHandle, Page, WaitForSelectorOptions } from 'puppeteer';
+
+
+export { JSONDB };
+
+type Logger = Pick<Console, 'log' | 'info' | 'debug' | 'error' | 'trace' | 'warn'>;
+
+declare global {
+  interface Window {
+    instautoSleep(ms: number): Promise<void>
+    instautoSleep(ms: number): Promise<void>
+    instautoLog(...args: unknown[]): void
+    instautoOnImageLiked(href: string): void
+    _sharedData?: { config?: { viewer?: { username?: string } } };
+  }
+}
+
+type LikeMediaType = 'image' | 'video' | 'unknown';
+
+type LikeMediaData = {
+  mediaType: LikeMediaType;
+  mediaDesc: string;
+  src?: string | undefined;
+  alt?: string | undefined;
+  poster?: string | undefined;
+};
+
+type ShouldLikeMedia = (data: LikeMediaData) => boolean;
+
+type ShouldFollowUserData = {
+  username: string;
+  isVerified: boolean;
+  isBusinessAccount: boolean;
+  isProfessionalAccount: boolean;
+  fullName: string;
+  biography: string;
+  profilePicUrlHd: string;
+  externalUrl: string | null;
+  businessCategoryName: string | null;
+  categoryName: string | null;
+};
+
+type ShouldFollowUser = (data: ShouldFollowUserData) => boolean;
+
+export type InstautoOptions = {
+  instagramBaseUrl?: string;
+  cookiesPath: string;
+  username?: string;
+  password?: string;
+  enableCookies?: boolean;
+  randomizeUserAgent?: boolean;
+  userAgent?: string;
+  maxFollowsPerHour?: number;
+  maxFollowsPerDay?: number;
+  maxLikesPerDay?: number;
+  followUserRatioMin?: number;
+  followUserRatioMax?: number;
+  followUserMaxFollowers?: number | null;
+  followUserMaxFollowing?: number | null;
+  followUserMinFollowers?: number | null;
+  followUserMinFollowing?: number | null;
+  shouldFollowUser?: ShouldFollowUser | null;
+  shouldLikeMedia?: ShouldLikeMedia | null;
+  dontUnfollowUntilTimeElapsed?: number;
+  excludeUsers?: string[];
+  dryRun?: boolean;
+  screenshotOnError?: boolean;
+  screenshotsPath?: string;
+  logger?: Logger;
+};
+
+type LikeUserImagesOptions = {
+  username?: string | undefined;
+  likeImagesMin?: number | undefined;
+  likeImagesMax?: number | undefined;
+};
+
+type ProcessUserFollowersOptions = {
+  maxFollowsPerUser?: number | undefined;
+  skipPrivate?: boolean | undefined;
+  enableLikeImages?: boolean | undefined;
+  likeImagesMin?: number | undefined;
+  likeImagesMax?: number | undefined;
+};
+
+type ProcessUsersFollowersOptions = {
+  usersToFollowFollowersOf: string[];
+  maxFollowsTotal?: number | undefined;
+  skipPrivate?: boolean | undefined;
+  enableFollow?: boolean | undefined;
+  enableLikeImages?: boolean | undefined;
+  likeImagesMin?: number | undefined;
+  likeImagesMax?: number | undefined;
+};
+
+type UnfollowOptions = {
+  limit?: number | undefined;
+};
+
+type UnfollowOldOptions = {
+  ageInDays?: number | undefined;
+  limit?: number | undefined;
+};
+
+type FollowUserRestrictions = {
+  username: string;
+  skipPrivate?: boolean | undefined;
+};
+
+type SafelyFollowUserListOptions = {
+  users: string[];
+  skipPrivate?: boolean | undefined;
+  limit?: number | undefined;
+};
+
+type GraphqlPageInfo = { end_cursor: string | null; has_next_page: boolean };
+type GraphqlEdge = { node: { username: string } };
+type GraphqlUserList = { edges: GraphqlEdge[]; page_info: GraphqlPageInfo };
+
+type GraphqlJson = {
+  data: {
+    user?: {
+      edge_followed_by?: GraphqlUserList;
+      edge_follow?: GraphqlUserList;
+    };
+    shortcode_media?: {
+      edge_liked_by?: GraphqlUserList;
+    };
+  };
+};
+
+type GraphqlVariables = {
+  first?: number;
+  after?: string | null;
+  [key: string]: string | number | boolean | null | undefined;
+};
+
+type GraphqlQueryUsersOptions = {
+  queryHash: string;
+  getResponseProp: (json: GraphqlJson) => GraphqlUserList | undefined;
+  graphqlVariables: GraphqlVariables;
+};
+
+type InstagramUser = {
+  id: string;
+  username?: string;
+  edge_followed_by: { count: number };
+  edge_follow: { count: number };
+  is_private: boolean;
+  is_verified: boolean;
+  is_business_account: boolean;
+  is_professional_account: boolean;
+  full_name: string;
+  biography: string;
+  profile_pic_url_hd: string;
+  external_url: string | null;
+  business_category_name: string | null;
+  category_name: string | null;
+};
+
+export type InstautoApi = {
+  followUserFollowers: (username: string, options?: ProcessUserFollowersOptions) => Promise<void>;
+  unfollowNonMutualFollowers: (options?: UnfollowOptions) => Promise<number>;
+  unfollowAllUnknown: (options?: UnfollowOptions) => Promise<number>;
+  unfollowOldFollowed: (options: UnfollowOldOptions) => Promise<number>;
+  followUser: (username: string) => Promise<void>;
+  unfollowUser: (username: string) => Promise<FollowedUser>;
+  likeUserImages: (options?: LikeUserImagesOptions) => Promise<void>;
+  sleep: (ms: number, deviation?: number) => Promise<void>;
+  listManuallyFollowedUsers: () => Promise<string[]>;
+  getFollowersOrFollowing: (options: { userId: string; getFollowers?: boolean }) => Promise<string[]>;
+  getUsersWhoLikedContent: (options: { contentId: string }) => AsyncGenerator<string[], string[], void>;
+  safelyUnfollowUserList: (usersToUnfollow: AsyncIterable<string | string[]> | Iterable<string | string[]>, limit?: number, condition?: (username: string) => boolean | Promise<boolean>) => Promise<number>;
+  safelyFollowUserList: (options: SafelyFollowUserListOptions) => Promise<void>;
+  getPage: () => Page;
+  followUsersFollowers: (options: ProcessUsersFollowersOptions) => Promise<void>;
+  doesUserFollowMe: (username: string) => Promise<boolean | undefined>;
+  navigateToUserAndGetData: (username: string) => Promise<InstagramUser | undefined>;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isInstagramUser(value: unknown): value is InstagramUser {
+  if (!isRecord(value)) return false;
+  const { id, edge_followed_by: edgeFollowedBy, edge_follow: edgeFollow, is_private: isPrivate, is_verified: isVerified } = value;
+  return typeof id === 'string'
+    && isRecord(edgeFollowedBy)
+    && isRecord(edgeFollow)
+    && typeof isPrivate === 'boolean'
+    && typeof isVerified === 'boolean';
+}
 
 // NOTE duplicated inside puppeteer page
-function shuffleArray(arrayIn) {
+function shuffleArray<T>(arrayIn: T[]): T[] {
   const array = [...arrayIn];
   for (let i = array.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]]; // eslint-disable-line no-param-reassign
+    const temp = array[i];
+    if (temp === undefined || array[j] === undefined) {
+      throw new Error('Invalid shuffle index');
+    }
+    array[i] = array[j]; // eslint-disable-line no-param-reassign
+    array[j] = temp; // eslint-disable-line no-param-reassign
   }
   return array;
 }
 
 // https://stackoverflow.com/questions/14822153/escape-single-quote-in-xpath-with-nokogiri
 // example str: "That's mine", he said.
-function escapeXpathStr(str) {
-  const parts = str.split("'").map((token) => `'${token}'`);
+function escapeXpathStr(str: string): string {
+  const parts = str.split("'").map((token: string) => `'${token}'`);
   if (parts.length === 1) return `${parts[0]}`;
   const str2 = parts.join(', "\'", ');
   return `concat(${str2})`;
@@ -32,7 +226,7 @@ const botWorkShiftHours = 16;
 const dayMs = 24 * 60 * 60 * 1000;
 const hourMs = 60 * 60 * 1000;
 
-const Instauto = async (db: any, browser: any, options: any) => {
+const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoOptions): Promise<InstautoApi> => {
   const {
     instagramBaseUrl = 'https://www.instagram.com',
     cookiesPath,
@@ -72,7 +266,7 @@ const Instauto = async (db: any, browser: any, options: any) => {
   } = options;
 
   let myUsername = myUsernameIn;
-  const userDataCache = {};
+  const userDataCache: Record<string, InstagramUser> = {};
 
   assert(cookiesPath);
   assert(db);
@@ -84,10 +278,10 @@ const Instauto = async (db: any, browser: any, options: any) => {
     getPrevUnfollowedUsers, getPrevFollowedUsers, addLikedPhoto,
   } = db;
 
-  const getNumLikesThisTimeUnit = (time) => getLikedPhotosLastTimeUnit(time).length;
+  const getNumLikesThisTimeUnit = (time: number) => getLikedPhotosLastTimeUnit(time).length;
 
   // State
-  let page: any;
+  let page: Page;
 
   async function takeScreenshot() {
     if (!screenshotOnError) return;
@@ -131,24 +325,24 @@ const Instauto = async (db: any, browser: any, options: any) => {
     }
   }
 
-  const sleepFixed = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+  const sleepFixed = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-  const sleep = (ms, deviation = 1) => {
+  const sleep = (ms: number, deviation = 1) => {
     let msWithDev = ((Math.random() * deviation) + 1) * ms;
     if (dryRun) msWithDev = Math.min(3000, msWithDev); // for dryRun, no need to wait so long
     logger.log('Waiting', (msWithDev / 1000).toFixed(2), 'sec');
     return sleepFixed(msWithDev);
   };
 
-  async function onImageLiked({ username, href }) {
+  async function onImageLiked({ username, href }: { username: string; href: string }) {
     await addLikedPhoto({ username, href, time: new Date().getTime() });
   }
 
-  function getNumFollowedUsersThisTimeUnit(timeUnit) {
+  function getNumFollowedUsersThisTimeUnit(timeUnit: number) {
     const now = new Date().getTime();
 
-    return getPrevFollowedUsers().filter(u => now - u.time < timeUnit).length
-      + getPrevUnfollowedUsers().filter(u => !u.noActionTaken && now - u.time < timeUnit).length;
+    return getPrevFollowedUsers().filter((u) => now - u.time < timeUnit).length
+      + getPrevUnfollowedUsers().filter((u) => !u.noActionTaken && now - u.time < timeUnit).length;
   }
 
   async function checkReachedFollowedUserDayLimit() {
@@ -178,20 +372,21 @@ const Instauto = async (db: any, browser: any, options: any) => {
     await checkReachedLikedUserDayLimit();
   }
 
-  function haveRecentlyFollowedUser(username) {
+  function haveRecentlyFollowedUser(username: string) {
     const followedUserEntry = getPrevFollowedUser(username);
     if (!followedUserEntry) return false; // We did not previously follow this user, so don't know
     return new Date().getTime() - followedUserEntry.time < dontUnfollowUntilTimeElapsed;
   }
 
   // See https://github.com/mifi/SimpleInstaBot/issues/140#issuecomment-1149105387
-  const gotoUrl = async (url) => page.goto(url, { waitUntil: ['load', 'domcontentloaded', 'networkidle0'] });
+  const gotoUrl = async (url: string) => page.goto(url, { waitUntil: ['load', 'domcontentloaded', 'networkidle0'] });
 
-  async function gotoWithRetry(url) {
+  async function gotoWithRetry(url: string) {
     const maxAttempts = 3;
     for (let attempt = 0; ; attempt += 1) {
       logger.log(`Goto ${url}`);
       const response = await gotoUrl(url);
+      if (!response) throw new Error('Navigation did not return a response');
       const status = response.status();
       logger.log('Page loaded');
       await sleep(2000);
@@ -210,15 +405,15 @@ const Instauto = async (db: any, browser: any, options: any) => {
     }
   }
 
-  const getUserPageUrl = (username) => `${instagramBaseUrl}/${encodeURIComponent(username)}`;
+  const getUserPageUrl = (username: string) => `${instagramBaseUrl}/${encodeURIComponent(username)}`;
 
-  function isAlreadyOnUserPage(username) {
+  function isAlreadyOnUserPage(username: string) {
     const url = getUserPageUrl(username);
     // optimization: already on URL? (ignore trailing slash)
     return (page.url().replace(/\/$/, '') === url.replace(/\/$/, ''));
   }
 
-  async function navigateToUser(username) {
+  async function navigateToUser(username: string) {
     if (isAlreadyOnUserPage(username)) return true;
 
     // logger.log('navigating from', page.url(), 'to', url);
@@ -237,8 +432,8 @@ const Instauto = async (db: any, browser: any, options: any) => {
       // https://github.com/mifi/SimpleInstaBot/issues/48
       // example: https://www.instagram.com/victorialarson__/
       // so we check if the page has the user's name on it
-      const elementHandles = await page.$x(`//body//main//*[contains(text(),${escapeXpathStr(username)})]`);
-      const foundUsernameOnPage = elementHandles.length > 0;
+      const elementHandle = await getXpathElement(`//body//main//*[contains(text(),${escapeXpathStr(username)})]`);
+      const foundUsernameOnPage = elementHandle != null;
       if (!foundUsernameOnPage) logger.warn(`Cannot find text "${username}" on page`);
       return foundUsernameOnPage;
     }
@@ -246,14 +441,14 @@ const Instauto = async (db: any, browser: any, options: any) => {
     throw new Error(`Navigate to user failed with status ${status}`);
   }
 
-  async function navigateToUserWithCheck(username) {
+  async function navigateToUserWithCheck(username: string) {
     if (!(await navigateToUser(username))) throw new Error('User not found');
   }
 
-  async function navigateToUserAndGetData(username) {
+  async function navigateToUserAndGetData(username: string): Promise<InstagramUser | undefined> {
     const cachedUserData = userDataCache[username];
 
-    if (isAlreadyOnUserPage(username)) {
+    if (isAlreadyOnUserPage(username) && cachedUserData) {
       // assume we have data
       return cachedUserData;
     }
@@ -264,7 +459,7 @@ const Instauto = async (db: any, browser: any, options: any) => {
       return cachedUserData;
     }
 
-    async function getUserDataFromPage() {
+    async function getUserDataFromPage(): Promise<InstagramUser | undefined> {
       // https://github.com/mifi/instauto/issues/115#issuecomment-1199335650
       // to test in browser: document.getElementsByTagName('html')[0].innerHTML.split('\n');
       try {
@@ -272,19 +467,35 @@ const Instauto = async (db: any, browser: any, options: any) => {
         for (let q of body.split(/\r?\n/)) {
           if (q.includes('edge_followed_by')) {
             // eslint-disable-next-line prefer-destructuring
-            q = q.split(',[],[')[1];
+            q = q.split(',[],[')[1] ?? '';
             // eslint-disable-next-line prefer-destructuring
-            q = q.split(']]]')[0];
-            q = JSON.parse(q);
+            q = q.split(']]]')[0] ?? '';
+            if (!q) return undefined;
+            const outerParsed: unknown = JSON.parse(q);
             // eslint-disable-next-line no-underscore-dangle
-            q = q.data.__bbox.result.response;
+            if (!isRecord(outerParsed)) return undefined;
+            const data = outerParsed['data'];
+            if (!isRecord(data)) return undefined;
+            const bbox = data['__bbox'];
+            if (!isRecord(bbox)) return undefined;
+            const result = bbox['result'];
+            if (!isRecord(result)) return undefined;
+            const response = result['response'];
+            if (typeof response !== 'string') return undefined;
+            q = response;
             q = q.replace(/\\/g, '');
-            q = JSON.parse(q);
-            return q.data.user;
+            const innerParsed: unknown = JSON.parse(q);
+            if (!isRecord(innerParsed)) return undefined;
+            const innerData = innerParsed['data'];
+            if (!isRecord(innerData)) return undefined;
+            const innerUser = innerData['user'];
+            if (!isInstagramUser(innerUser)) return undefined;
+            return innerUser;
           }
         }
       } catch (err) {
-        logger.warn(`Unable to get user data from page (${err.name}) - This is normal`);
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        logger.warn(`Unable to get user data from page (${message}) - This is normal`);
       }
       return undefined;
     }
@@ -292,11 +503,11 @@ const Instauto = async (db: any, browser: any, options: any) => {
     // intercept special XHR network request that fetches user's data and store it in a cache
     // TODO fallback to DOM to get user ID if this request fails?
     // https://github.com/mifi/SimpleInstaBot/issues/125#issuecomment-1145354294
-    async function getUserDataFromInterceptedRequest() {
+    async function getUserDataFromInterceptedRequest(): Promise<InstagramUser | undefined> {
       const t = setTimeout(async () => {
         logger.log('Unable to intercept request, will send manually');
         try {
-          await page.evaluate(async (username2) => {
+          await page.evaluate(async (username2: string) => {
             const response = await window.fetch(`https://i.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(username2.toLowerCase())}`, { mode: 'cors', credentials: 'include', headers: { 'x-ig-app-id': '936619743392459' } });
             await response.json(); // else it will not finish the request
           }, username);
@@ -317,8 +528,14 @@ const Instauto = async (db: any, browser: any, options: any) => {
           // page.waitForNavigation({ waitUntil: 'networkidle0' }),
         ]);
 
-        const json = JSON.parse(await foundResponse.text());
-        return json.data.user;
+        const jsonText = await foundResponse.text();
+        const jsonParsed: unknown = JSON.parse(jsonText);
+        if (!isRecord(jsonParsed)) return undefined;
+        const data = jsonParsed['data'];
+        if (!isRecord(data)) return undefined;
+        const user = data['user'];
+        if (!isInstagramUser(user)) return undefined;
+        return user;
       } finally {
         clearTimeout(t);
       }
@@ -345,13 +562,29 @@ const Instauto = async (db: any, browser: any, options: any) => {
     return undefined;
   }
 
-  async function getPageJson() {
-    return JSON.parse(await (await (await page.$('pre')).getProperty('textContent')).jsonValue());
+  async function getPageJson(): Promise<GraphqlJson> {
+    const pre = await page.$('pre');
+    assert(pre);
+    const textContentHandle = await pre.getProperty('textContent');
+    const textContentValue = await textContentHandle.jsonValue();
+    assert(typeof textContentValue === 'string')
+    return JSON.parse(textContentValue) as GraphqlJson;
+  }
+
+  // How to test xpaths in the browser:
+  // document.evaluate("your xpath", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null ).singleNodeValue
+  async function getXpathElement(xpath: string, opts?: WaitForSelectorOptions): Promise<ElementHandle | null> {
+    try {
+      return await page.waitForSelector(`::-p-xpath(${xpath})`, opts);
+    } catch (err) {
+      logger.debug(`Element not found for xpath: ${xpath}`);
+      return null;
+    }
   }
 
   async function isActionBlocked() {
-    if ((await page.$x('//*[contains(text(), "Action Blocked")]')).length > 0) return true;
-    if ((await page.$x('//*[contains(text(), "Try Again Later")]')).length > 0) return true;
+    if (!(await getXpathElement('//*[contains(text(), "Action Blocked")]', { timeout: 1000 }))) return true;
+    if (!(await getXpathElement('//*[contains(text(), "Try Again Later")]', { timeout: 1000 }))) return true;
     return false;
   }
 
@@ -365,21 +598,19 @@ const Instauto = async (db: any, browser: any, options: any) => {
     }
   }
 
-  // How to test xpaths in the browser:
-  // document.evaluate("your xpath", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null ).singleNodeValue
-  async function findButtonWithText(text) {
+  async function findButtonWithText(text: string) {
     // todo escape text?
 
     // button seems to look like this now:
     // <button class="..."><div class="...">Follow</div></button>
     // https://sqa.stackexchange.com/questions/36918/xpath-text-buy-now-is-working-but-not-containstext-buy-now
     // https://github.com/mifi/SimpleInstaBot/issues/106
-    let elementHandles = await page.$x(`//header//button[contains(.,'${text}')]`);
-    if (elementHandles.length > 0) return elementHandles[0];
+    let elementHandle = await getXpathElement(`//header//button[contains(.,'${text}')]`, { timeout: 1000 });
+    if (elementHandle != null) return elementHandle;
 
     // old button:
-    elementHandles = await page.$x(`//header//button[text()='${text}']`);
-    if (elementHandles.length > 0) return elementHandles[0];
+    elementHandle = await getXpathElement(`//header//button[text()='${text}']`, { timeout: 1000 });
+    if (elementHandle != null) return elementHandle;
 
     return undefined;
   }
@@ -401,31 +632,31 @@ const Instauto = async (db: any, browser: any, options: any) => {
     button = await findButtonWithText('Requested');
     if (button) return button;
 
-    let elementHandles = await page.$x("//header//button[*//span[@aria-label='Following']]");
-    if (elementHandles.length > 0) return elementHandles[0];
+    let elementHandle = await getXpathElement("//header//button[*//span[@aria-label='Following']]", { timeout: 1000 });
+    if (elementHandle != null) return elementHandle;
 
-    elementHandles = await page.$x("//header//button[*//span[@aria-label='Requested']]");
-    if (elementHandles.length > 0) return elementHandles[0];
+    elementHandle = await getXpathElement("//header//button[*//span[@aria-label='Requested']]", { timeout: 1000 });
+    if (elementHandle != null) return elementHandle;
 
-    elementHandles = await page.$x("//header//button[*//*[name()='svg'][@aria-label='Following']]");
-    if (elementHandles.length > 0) return elementHandles[0];
+    elementHandle = await getXpathElement("//header//button[*//*[name()='svg'][@aria-label='Following']]", { timeout: 1000 });
+    if (elementHandle != null) return elementHandle;
 
-    elementHandles = await page.$x("//header//button[*//*[name()='svg'][@aria-label='Requested']]");
-    if (elementHandles.length > 0) return elementHandles[0];
+    elementHandle = await getXpathElement("//header//button[*//*[name()='svg'][@aria-label='Requested']]", { timeout: 1000 });
+    if (elementHandle != null) return elementHandle;
 
     return undefined;
   }
 
   async function findUnfollowConfirmButton() {
-    let elementHandles = await page.$x("//button[text()='Unfollow']");
-    if (elementHandles.length > 0) return elementHandles[0];
+    let elementHandle = await getXpathElement("//button[text()='Unfollow']", { timeout: 1000 });
+    if (elementHandle != null) return elementHandle;
 
     // https://github.com/mifi/SimpleInstaBot/issues/191
-    elementHandles = await page.$x("//*[@role='button'][contains(.,'Unfollow')]");
-    return elementHandles[0];
+    elementHandle = await getXpathElement("//*[@role='button'][contains(.,'Unfollow')]", { timeout: 1000 });
+    return elementHandle;
   }
 
-  async function followUser(username) {
+  async function followUser(username: string) {
     await navigateToUserAndGetData(username);
     const elementHandle = await findFollowButton();
 
@@ -450,8 +681,7 @@ const Instauto = async (db: any, browser: any, options: any) => {
       const elementHandle2 = await findUnfollowButton();
 
       // Don't want to retry this user over and over in case there is an issue https://github.com/mifi/instauto/issues/33#issuecomment-723217177
-      const entry = { username, time: new Date().getTime() };
-      if (!elementHandle2) entry.failed = true;
+      const entry: FollowedUser = { username, time: new Date().getTime(), ...(elementHandle2 ? {} : { failed: true }) };
 
       await addPrevFollowedUser(entry);
 
@@ -467,23 +697,23 @@ const Instauto = async (db: any, browser: any, options: any) => {
 
   // See https://github.com/timgrossmann/InstaPy/pull/2345
   // https://github.com/timgrossmann/InstaPy/issues/2355
-  async function unfollowUser(username) {
+  async function unfollowUser(username: string) {
     await navigateToUserAndGetData(username);
     logger.log(`Unfollowing user ${username}`);
 
-    const res = { username, time: new Date().getTime() };
+      const res: FollowedUser = { username, time: new Date().getTime() };
 
     const elementHandle = await findUnfollowButton();
-    if (!elementHandle) {
-      const elementHandle2 = await findFollowButton();
-      if (elementHandle2) {
-        logger.log('User has been unfollowed already');
-        res.noActionTaken = true;
-      } else {
-        logger.log('Failed to find unfollow button');
-        res.noActionTaken = true;
+      if (!elementHandle) {
+        const elementHandle2 = await findFollowButton();
+        if (elementHandle2) {
+          logger.log('User has been unfollowed already');
+          res.noActionTaken = true;
+        } else {
+          logger.log('Failed to find unfollow button');
+          res.noActionTaken = true;
+        }
       }
-    }
 
     if (!dryRun) {
       if (elementHandle) {
@@ -508,17 +738,17 @@ const Instauto = async (db: any, browser: any, options: any) => {
     return res;
   }
 
-  const isLoggedIn = async () => (await page.$x('//*[@aria-label="Home"]')).length === 1;
+  const isLoggedIn = async () => (await getXpathElement('//*[@aria-label="Home"]'), { timeout: 1000 }) != null;
 
-  async function* graphqlQueryUsers({ queryHash, getResponseProp, graphqlVariables: graphqlVariablesIn }) {
+  async function* graphqlQueryUsers({ queryHash, getResponseProp, graphqlVariables: graphqlVariablesIn }: GraphqlQueryUsersOptions): AsyncGenerator<string[], string[], void> {
     const graphqlUrl = `${instagramBaseUrl}/graphql/query/?query_hash=${queryHash}`;
 
-    const graphqlVariables = {
-      first: 50,
+    const graphqlVariables: GraphqlVariables = {
       ...graphqlVariablesIn,
+      first: graphqlVariablesIn.first ?? 50,
     };
 
-    const outUsers = [];
+    const outUsers: string[] = [];
 
     let hasNextPage = true;
     let i = 0;
@@ -530,11 +760,12 @@ const Instauto = async (db: any, browser: any, options: any) => {
       const json = await getPageJson();
 
       const subProp = getResponseProp(json);
+      assert(subProp);
       const pageInfo = subProp.page_info;
       const { edges } = subProp;
 
-      const ret = [];
-      edges.forEach(e => ret.push(e.node.username));
+      const ret: string[] = [];
+      edges.forEach((e) => ret.push(e.node.username));
 
       graphqlVariables.after = pageInfo.end_cursor;
       hasNextPage = pageInfo.has_next_page;
@@ -551,25 +782,25 @@ const Instauto = async (db: any, browser: any, options: any) => {
     return outUsers;
   }
 
-  function getFollowersOrFollowingGenerator({ userId, getFollowers = false }) {
+  function getFollowersOrFollowingGenerator({ userId, getFollowers = false }: { userId: string; getFollowers?: boolean }) {
     return graphqlQueryUsers({
-      getResponseProp: (json) => json.data.user[getFollowers ? 'edge_followed_by' : 'edge_follow'],
+      getResponseProp: (json) => json.data.user?.[getFollowers ? 'edge_followed_by' : 'edge_follow'],
       graphqlVariables: { id: userId },
       queryHash: getFollowers ? '37479f2b8209594dde7facb0d904896a' : '58712303d941c6855d4e888c5f0cd22f',
     });
   }
 
-  async function getFollowersOrFollowing({ userId, getFollowers = false }) {
-    let users = [];
+  async function getFollowersOrFollowing({ userId, getFollowers = false }: { userId: string; getFollowers?: boolean }) {
+    let users: string[] = [];
     for await (const usersBatch of getFollowersOrFollowingGenerator({ userId, getFollowers })) {
       users = [...users, ...usersBatch];
     }
     return users;
   }
 
-  function getUsersWhoLikedContent({ contentId }) {
+  function getUsersWhoLikedContent({ contentId }: { contentId: string }) {
     return graphqlQueryUsers({
-      getResponseProp: (json) => json.data.shortcode_media.edge_liked_by,
+      getResponseProp: (json) => json.data.shortcode_media?.edge_liked_by,
       graphqlVariables: {
         shortcode: contentId,
         include_reel: true,
@@ -579,15 +810,20 @@ const Instauto = async (db: any, browser: any, options: any) => {
   }
 
   /* eslint-disable no-undef */
-  async function likeCurrentUserImagesPageCode({ dryRun: dryRunIn, likeImagesMin, likeImagesMax, shouldLikeMedia: shouldLikeMediaIn }) {
-    const allImages = Array.from(document.getElementsByTagName('a')).filter(el => /instagram.com\/p\//.test(el.href));
+  async function likeCurrentUserImagesPageCode({ dryRun: dryRunIn, likeImagesMin, likeImagesMax, shouldLikeMedia: shouldLikeMediaIn }: { dryRun: boolean; likeImagesMin: number; likeImagesMax: number; shouldLikeMedia: ShouldLikeMedia | null }) {
+    const allImages = Array.from(document.getElementsByTagName('a')).filter((el) => typeof el.href === 'string' && /instagram.com\/p\//.test(el.href));
 
     // eslint-disable-next-line no-shadow
-    function shuffleArray(arrayIn) {
+    function shuffleArray<T>(arrayIn: T[]): T[] {
       const array = [...arrayIn];
       for (let i = array.length - 1; i > 0; i -= 1) {
         const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]]; // eslint-disable-line no-param-reassign
+        const temp = array[i];
+        if (temp === undefined || array[j] === undefined) {
+          throw new Error('Invalid shuffle index');
+        }
+        array[i] = array[j]; // eslint-disable-line no-param-reassign
+        array[j] = temp; // eslint-disable-line no-param-reassign
       }
       return array;
     }
@@ -596,17 +832,17 @@ const Instauto = async (db: any, browser: any, options: any) => {
 
     const numImagesToLike = Math.floor((Math.random() * ((likeImagesMax + 1) - likeImagesMin)) + likeImagesMin);
 
-    instautoLog(`Liking ${numImagesToLike} image(s)`);
+    window.instautoLog(`Liking ${numImagesToLike} image(s)`);
 
     const images = imagesShuffled.slice(0, numImagesToLike);
 
     if (images.length < 1) {
-      instautoLog('No images to like');
+      window.instautoLog('No images to like');
       return;
     }
 
     for (const image of images) {
-      image.click();
+      image.click?.();
 
       await window.instautoSleep(3000);
 
@@ -614,7 +850,7 @@ const Instauto = async (db: any, browser: any, options: any) => {
 
       if (!dialog) throw new Error('Dialog not found');
 
-      const section = Array.from(dialog.querySelectorAll('section')).find(s => s.querySelectorAll('*[aria-label="Like"]')[0] && s.querySelectorAll('*[aria-label="Comment"]')[0]);
+      const section = Array.from(dialog.querySelectorAll('section')).find((s) => s.querySelectorAll('*[aria-label="Like"]')[0] && s.querySelectorAll('*[aria-label="Comment"]')[0]);
 
       if (!section) throw new Error('Like button section not found');
 
@@ -623,39 +859,49 @@ const Instauto = async (db: any, browser: any, options: any) => {
       if (!likeButtonChild) throw new Error('Like button not found (aria-label)');
 
       // eslint-disable-next-line no-inner-declarations
-      function findClickableParent(el) {
-        let elAt = el;
+      function findClickableParent(el: Element | null) {
+        let elAt: Element | undefined = el ?? undefined;
         while (elAt) {
-          if (elAt.click) {
-            return elAt;
+          if ('click' in elAt && typeof elAt.click === 'function') {
+            return elAt as HTMLElement;
           }
-          elAt = elAt.parentElement;
+          elAt = elAt.parentElement ?? undefined;
         }
         return undefined;
       }
 
-      const foundClickable = findClickableParent(likeButtonChild);
+    const foundClickable = findClickableParent(likeButtonChild);
 
-      if (!foundClickable) throw new Error('Like button not found');
+    if (!foundClickable) throw new Error('Like button not found');
 
-      const instautoLog2 = instautoLog;
+      const instautoLog2 = window.instautoLog;
 
       // eslint-disable-next-line no-inner-declarations
       function likeImage() {
+        const dialogResolved = dialog;
+        if (!dialogResolved) throw new Error('Dialog not found');
         if (shouldLikeMediaIn !== null && (typeof shouldLikeMediaIn === 'function')) {
-          const presentation = dialog.querySelector('article[role=presentation]');
-          const img = presentation.querySelector('img[alt^="Photo by "]');
-          const video = presentation.querySelector('video[type="video/mp4"]');
-          const mediaDesc = presentation.querySelector('[role=menuitem] h2 ~ div').textContent;
-          let mediaType; let src; let alt; let poster;
+          const presentation = dialogResolved.querySelector('article[role=presentation]');
+          if (!presentation) {
+            instautoLog2('Presentation element not found');
+            return;
+          }
+          const img = presentation.querySelector('img[alt^="Photo by "]') as HTMLImageElement | null;
+          const video = presentation.querySelector('video[type="video/mp4"]') as HTMLVideoElement | null;
+          const menuItem = presentation.querySelector('[role=menuitem] h2 ~ div');
+          const mediaDesc = menuItem?.textContent ?? '';
+          let mediaType: LikeMediaType = 'unknown';
+          let src: string | undefined;
+          let alt: string | undefined;
+          let poster: string | undefined;
           if (img) {
             mediaType = 'image';
-            ({ src } = img);
-            ({ alt } = img);
+            src = img.src;
+            alt = img.alt;
           } else if (video) {
             mediaType = 'video';
-            ({ poster } = video);
-            ({ src } = video);
+            poster = video.poster;
+            src = video.src;
           } else {
             instautoLog2('Could not determin mediaType');
           }
@@ -666,8 +912,8 @@ const Instauto = async (db: any, browser: any, options: any) => {
           }
         }
 
-        foundClickable.click();
-        window.instautoOnImageLiked(image.href);
+        foundClickable?.click?.();
+        if (image.href) window.instautoOnImageLiked(image.href);
       }
 
       if (!dryRunIn) {
@@ -684,26 +930,28 @@ const Instauto = async (db: any, browser: any, options: any) => {
 
       if (!closeButton) throw new Error('Close button not found');
 
-      closeButton.click();
+      closeButton?.click?.();
 
       await window.instautoSleep(5000);
     }
 
-    instautoLog('Done liking images');
+    window.instautoLog('Done liking images');
   }
   /* eslint-enable no-undef */
 
 
-  async function likeUserImages({ username, likeImagesMin, likeImagesMax } = {}) {
-    if (!likeImagesMin || !likeImagesMax || likeImagesMax < likeImagesMin || likeImagesMin < 1) throw new Error('Invalid arguments');
-
+  async function likeUserImages({ username, likeImagesMin, likeImagesMax }: LikeUserImagesOptions = {}) {
+    if (!username) throw new Error('Username is required');
+    if (likeImagesMin == null || likeImagesMax == null || likeImagesMax < likeImagesMin || likeImagesMin < 1) throw new Error('Invalid arguments');
     await navigateToUserAndGetData(username);
 
     logger.log(`Liking ${likeImagesMin}-${likeImagesMax} user images`);
     try {
-      await page.exposeFunction('instautoSleep', sleep);
-      await page.exposeFunction('instautoLog', (...args) => console.log(...args));
-      await page.exposeFunction('instautoOnImageLiked', (href) => onImageLiked({ username, href }));
+      await page.exposeFunction('instautoSleep', (...args: Parameters<typeof window['instautoSleep']>) => sleep(...args));
+      await page.exposeFunction('instautoLog', (...args: Parameters<typeof window['instautoLog']>) => console.log(...args));
+      await page.exposeFunction('instautoOnImageLiked', (href: Parameters<typeof window['instautoOnImageLiked']>[0]) => {
+        return onImageLiked({ username, href });
+      });
     } catch (err) {
       // Ignore already exists error
     }
@@ -711,13 +959,14 @@ const Instauto = async (db: any, browser: any, options: any) => {
     await page.evaluate(likeCurrentUserImagesPageCode, { dryRun, likeImagesMin, likeImagesMax, shouldLikeMedia });
   }
 
-  async function followUserRespectingRestrictions({ username, skipPrivate = false }) {
+  async function followUserRespectingRestrictions({ username, skipPrivate = false }: FollowUserRestrictions) {
     if (getPrevFollowedUser(username)) {
       logger.log('Skipping already followed user', username);
       return false;
     }
 
     const graphqlUser = await navigateToUserAndGetData(username);
+    if (!graphqlUser) return false;
 
     const { edge_followed_by: { count: followedByCount }, edge_follow: { count: followsCount }, is_private: isPrivate, is_verified: isVerified, is_business_account: isBusinessAccount, is_professional_account: isProfessionalAccount, full_name: fullName, biography, profile_pic_url_hd: profilePicUrlHd, external_url: externalUrl, business_category_name: businessCategoryName, category_name: categoryName } = graphqlUser;
 
@@ -758,9 +1007,9 @@ const Instauto = async (db: any, browser: any, options: any) => {
     return true;
   }
 
-  async function processUserFollowers(username, {
+  async function processUserFollowers(username: string, {
     maxFollowsPerUser = 5, skipPrivate = false, enableLikeImages, likeImagesMin, likeImagesMax,
-  } = {}) {
+  }: ProcessUserFollowersOptions = {}) {
     const enableFollow = maxFollowsPerUser > 0;
 
     if (enableFollow) logger.log(`Following up to ${maxFollowsPerUser} followers of ${username}`);
@@ -770,7 +1019,9 @@ const Instauto = async (db: any, browser: any, options: any) => {
 
     let numFollowedForThisUser = 0;
 
-    const { id: userId } = await navigateToUserAndGetData(username);
+    const userData = await navigateToUserAndGetData(username);
+    if (!userData) return;
+    const { id: userId } = userData;
 
     for await (const followersBatch of getFollowersOrFollowingGenerator({ userId, getFollowers: true })) {
       logger.log('User followers batch', followersBatch);
@@ -803,7 +1054,7 @@ const Instauto = async (db: any, browser: any, options: any) => {
     }
   }
 
-  async function processUsersFollowers({ usersToFollowFollowersOf, maxFollowsTotal = 150, skipPrivate, enableFollow = true, enableLikeImages = false, likeImagesMin = 1, likeImagesMax = 2 }) {
+  async function processUsersFollowers({ usersToFollowFollowersOf, maxFollowsTotal = 150, skipPrivate, enableFollow = true, enableLikeImages = false, likeImagesMin = 1, likeImagesMax = 2 }: ProcessUsersFollowersOptions) {
     // If maxFollowsTotal turns out to be lower than the user list size, slice off the user list
     const usersToFollowFollowersOfSliced = shuffleArray(usersToFollowFollowersOf).slice(0, maxFollowsTotal);
 
@@ -828,7 +1079,7 @@ const Instauto = async (db: any, browser: any, options: any) => {
     }
   }
 
-  async function safelyUnfollowUserList(usersToUnfollow, limit, condition = () => true) {
+  async function safelyUnfollowUserList(usersToUnfollow: AsyncIterable<string | string[]> | Iterable<string | string[]>, limit?: number, condition: (username: string) => boolean | Promise<boolean> = () => true) {
     logger.log('Unfollowing users, up to limit', limit);
 
     let i = 0; // Number of people processed
@@ -839,7 +1090,7 @@ const Instauto = async (db: any, browser: any, options: any) => {
       const list = Array.isArray(listOrUsername) ? listOrUsername : [listOrUsername];
 
       for (const username of list) {
-        if (await condition(username)) {
+          if (await condition(username)) {
           try {
             const userFound = await navigateToUser(username);
 
@@ -885,7 +1136,7 @@ const Instauto = async (db: any, browser: any, options: any) => {
     return j;
   }
 
-  async function safelyFollowUserList({ users, skipPrivate, limit }) {
+  async function safelyFollowUserList({ users, skipPrivate, limit }: SafelyFollowUserListOptions) {
     logger.log('Following users, up to limit', limit);
 
     for (const username of users) {
@@ -912,16 +1163,16 @@ const Instauto = async (db: any, browser: any, options: any) => {
 
   if (randomizeUserAgent) {
     const userAgentGenerated = new UserAgent({ deviceCategory: 'desktop' });
-    await page.setUserAgent(userAgentGenerated.toString());
+    await page.setUserAgent({ userAgent: userAgentGenerated.toString() });
   }
-  if (userAgent) await page.setUserAgent(userAgent);
+  if (userAgent) await page.setUserAgent({ userAgent });
 
   if (enableCookies) await tryLoadCookies();
 
   const goHome = async () => gotoUrl(`${instagramBaseUrl}/?hl=en`);
 
   // https://github.com/mifi/SimpleInstaBot/issues/28
-  async function setLang(short, long, assumeLoggedIn = false) {
+  async function setLang(short: string, long: string, assumeLoggedIn = false) {
     logger.log(`Setting language to ${long} (${short})`);
 
     try {
@@ -935,20 +1186,21 @@ const Instauto = async (db: any, browser: any, options: any) => {
         await goHome();
       }
       await sleep(3000);
-      const elementHandles = await page.$x(`//select[//option[@value='${short}' and text()='${long}']]`);
-      if (elementHandles.length < 1) throw new Error('Language selector not found');
+      const selectElement = await getXpathElement(`//select[//option[@value='${short}' and text()='${long}']]`, { timeout: 1000 });
+      if (!selectElement) throw new Error('Language selector not found');
       logger.log('Found language selector');
 
       // https://stackoverflow.com/questions/45864516/how-to-select-an-option-from-dropdown-select
-      const alreadyEnglish = await page.evaluate((selectElem, short2) => {
-        const optionElem = selectElem.querySelector(`option[value='${short2}']`);
+      const alreadyEnglish = await page.evaluate((selectElem, short2: string) => {
+        const optionElem = selectElem.querySelector?.(`option[value='${short2}']`) as HTMLOptionElement | null;
+        if (!optionElem) return false;
         if (optionElem.selected) return true; // already selected?
         optionElem.selected = true;
         // eslint-disable-next-line no-undef
         const event = new Event('change', { bubbles: true });
-        selectElem.dispatchEvent(event);
+        selectElem.dispatchEvent?.(event);
         return false;
-      }, elementHandles[0], short);
+      }, selectElement, short);
 
       if (alreadyEnglish) {
         logger.log('Already English language');
@@ -980,14 +1232,14 @@ const Instauto = async (db: any, browser: any, options: any) => {
     }
   }
 
-  const setEnglishLang = async (assumeLoggedIn) => setLang('en', 'English', assumeLoggedIn);
+  const setEnglishLang = async (assumeLoggedIn: boolean) => setLang('en', 'English', assumeLoggedIn);
   // const setEnglishLang = async (assumeLoggedIn) => setLang('de', 'Deutsch', assumeLoggedIn);
 
-  async function tryPressButton(elementHandles, name, sleepMs = 3000) {
+  async function tryPressButton(elementHandle: ElementHandle | null, name: string, sleepMs = 3000) {
     try {
-      if (elementHandles.length === 1) {
+      if (elementHandle != null) {
         logger.log(`Pressing button: ${name}`);
-        elementHandles[0].click();
+        elementHandle.click();
         await sleep(sleepMs);
       }
     } catch (err) {
@@ -996,9 +1248,9 @@ const Instauto = async (db: any, browser: any, options: any) => {
   }
 
   async function tryClickLogin() {
-    async function tryClickButton(xpath) {
-      const btn = (await page.$x(xpath))[0];
-      if (!btn) return false;
+    async function tryClickButton(xpath: string) {
+      const btn = await getXpathElement(xpath, { timeout: 1000 });
+      if (btn == null) return false;
       await btn.click();
       return true;
     }
@@ -1010,9 +1262,9 @@ const Instauto = async (db: any, browser: any, options: any) => {
 
   await setEnglishLang(false);
 
-  await tryPressButton(await page.$x('//button[contains(text(), "Accept")]'), 'Accept cookies dialog');
-  await tryPressButton(await page.$x('//button[contains(text(), "Only allow essential cookies")]'), 'Accept cookies dialog 2 button 1', 10000);
-  await tryPressButton(await page.$x('//button[contains(text(), "Allow essential and optional cookies")]'), 'Accept cookies dialog 2 button 2', 10000);
+  await tryPressButton(await getXpathElement('//button[contains(text(), "Accept")]', { timeout: 1000 }), 'Accept cookies dialog');
+  await tryPressButton(await getXpathElement('//button[contains(text(), "Only allow essential cookies")]', { timeout: 1000 }), 'Accept cookies dialog 2 button 1', 10000);
+  await tryPressButton(await getXpathElement('//button[contains(text(), "Allow essential and optional cookies")]', { timeout: 1000 }), 'Accept cookies dialog 2 button 2', 10000);
 
   if (!(await isLoggedIn())) {
     if (!myUsername || !password) {
@@ -1028,7 +1280,7 @@ const Instauto = async (db: any, browser: any, options: any) => {
     }
 
     // Mobile version https://github.com/mifi/SimpleInstaBot/issues/7
-    await tryPressButton(await page.$x('//button[contains(text(), "Log In")]'), 'Login form button');
+    await tryPressButton(await getXpathElement('//button[contains(text(), "Log In")]'), 'Login form button');
 
     await page.type('input[name="username"]', myUsername, { delay: 50 });
     await sleep(1000);
@@ -1064,12 +1316,12 @@ const Instauto = async (db: any, browser: any, options: any) => {
     await setEnglishLang(true);
 
     // Mobile version https://github.com/mifi/SimpleInstaBot/issues/7
-    await tryPressButton(await page.$x('//button[contains(text(), "Save Info")]'), 'Login info dialog: Save Info');
+    await tryPressButton(await getXpathElement('//button[contains(text(), "Save Info")]'), 'Login info dialog: Save Info');
     // May sometimes be "Save info" too? https://github.com/mifi/instauto/pull/70
-    await tryPressButton(await page.$x('//button[contains(text(), "Save info")]'), 'Login info dialog: Save info');
+    await tryPressButton(await getXpathElement('//button[contains(text(), "Save info")]'), 'Login info dialog: Save info');
   }
 
-  await tryPressButton(await page.$x('//button[contains(text(), "Not Now")]'), 'Turn on Notifications dialog');
+  await tryPressButton(await getXpathElement('//button[contains(text(), "Not Now")]'), 'Turn on Notifications dialog');
 
   await trySaveCookies();
 
@@ -1079,7 +1331,7 @@ const Instauto = async (db: any, browser: any, options: any) => {
 
   try {
     // eslint-disable-next-line no-underscore-dangle
-    const detectedUsername = await page.evaluate(() => window._sharedData.config.viewer.username);
+    const detectedUsername = await page.evaluate(() => window._sharedData?.config?.viewer?.username);
     if (detectedUsername) myUsername = detectedUsername;
   } catch (err) {
     logger.error('Failed to detect username', err);
@@ -1089,38 +1341,46 @@ const Instauto = async (db: any, browser: any, options: any) => {
     throw new Error('Don\'t know what\'s my username');
   }
 
-  const { id: myUserId } = await navigateToUserAndGetData(myUsername);
+    const me = await navigateToUserAndGetData(myUsername);
+    if (!me) throw new Error('Failed to load my user data');
+    const { id: myUserId } = me;
 
   // --- END OF INITIALIZATION
 
-  async function doesUserFollowMe(username) {
+  async function doesUserFollowMe(username: string) {
     try {
       logger.info('Checking if user', username, 'follows us');
-      const { id: userId } = await navigateToUserAndGetData(username);
+      const userData = await navigateToUserAndGetData(username);
+      if (!userData) throw new Error('Unable to resolve user id');
+      const { id: userId } = userData;
 
-      const elementHandles = await page.$x("//a[contains(.,' following')][contains(@href,'/following')]");
-      if (elementHandles.length === 0) throw new Error('Following button not found');
+      const elementHandle = await getXpathElement("//a[contains(.,' following')][contains(@href,'/following')]");
+      if (elementHandle == null) throw new Error('Following button not found');
 
+      if (!userId) throw new Error('Unable to resolve user id');
       const [foundResponse] = await Promise.all([
         page.waitForResponse((response) => {
           const request = response.request();
           return request.method() === 'GET' && new RegExp(`instagram.com/api/v1/friendships/${userId}/following/`).test(request.url());
         }),
-        elementHandles[0].click(),
+        elementHandle.click(),
         // page.waitForNavigation({ waitUntil: 'networkidle0' }),
       ]);
 
-      const { users } = JSON.parse(await foundResponse.text());
+      const responseText = await foundResponse.text();
+      const parsed: unknown = JSON.parse(responseText);
+      if (!isRecord(parsed) || !Array.isArray(parsed['users'])) throw new Error('Invalid follow response');
+      const users = parsed['users'];
       if (users.length < 2) throw new Error('Unable to find user follows list');
       // console.log(users, myUserId);
-      return users.some((user) => String(user.pk) === String(myUserId) || user.username === myUsername); // If they follow us, we will show at the top of the list
+      return users.some((user) => isRecord(user) && (String(user['pk']) === String(myUserId) || user['username'] === myUsername)); // If they follow us, we will show at the top of the list
     } catch (err) {
       logger.error('Failed to check if user follows us', err);
       return undefined;
     }
   }
 
-  async function unfollowNonMutualFollowers({ limit } = {}) {
+  async function unfollowNonMutualFollowers({ limit }: UnfollowOptions = {}) {
     logger.log(`Unfollowing non-mutual followers (limit ${limit})...`);
 
     /* const allFollowers = await getFollowersOrFollowing({
@@ -1132,7 +1392,7 @@ const Instauto = async (db: any, browser: any, options: any) => {
       getFollowers: false,
     });
 
-    async function condition(username) {
+    async function condition(username: string) {
       // if (allFollowers.includes(u)) return false; // Follows us
       if (excludeUsers.includes(username)) return false; // User is excluded by exclude list
       if (haveRecentlyFollowedUser(username)) {
@@ -1148,7 +1408,7 @@ const Instauto = async (db: any, browser: any, options: any) => {
     return safelyUnfollowUserList(allFollowingGenerator, limit, condition);
   }
 
-  async function unfollowAllUnknown({ limit } = {}) {
+  async function unfollowAllUnknown({ limit }: UnfollowOptions = {}) {
     logger.log('Unfollowing all except excludes and auto followed');
 
     const unfollowUsersGenerator = getFollowersOrFollowingGenerator({
@@ -1156,7 +1416,7 @@ const Instauto = async (db: any, browser: any, options: any) => {
       getFollowers: false,
     });
 
-    function condition(username) {
+    function condition(username: string) {
       if (getPrevFollowedUser(username)) return false; // we followed this user, so it's not unknown
       if (excludeUsers.includes(username)) return false; // User is excluded by exclude list
       return true;
@@ -1165,20 +1425,22 @@ const Instauto = async (db: any, browser: any, options: any) => {
     return safelyUnfollowUserList(unfollowUsersGenerator, limit, condition);
   }
 
-  async function unfollowOldFollowed({ ageInDays, limit } = {}) {
-    assert(ageInDays);
+  async function unfollowOldFollowed({ ageInDays, limit }: UnfollowOldOptions = {}) {
+    assert(ageInDays != null, 'Age in days is required');
 
-    logger.log(`Unfollowing currently followed users who were auto-followed more than ${ageInDays} days ago (limit ${limit})...`);
+    const ageInDaysResolved = ageInDays;
+    logger.log(`Unfollowing currently followed users who were auto-followed more than ${ageInDaysResolved} days ago (limit ${limit})...`);
 
     const followingUsersGenerator = getFollowersOrFollowingGenerator({
       userId: myUserId,
       getFollowers: false,
     });
 
-    function condition(username) {
-      return getPrevFollowedUser(username)
-        && !excludeUsers.includes(username)
-        && (new Date().getTime() - getPrevFollowedUser(username).time) / (1000 * 60 * 60 * 24) > ageInDays;
+    function condition(username: string) {
+      const previous = getPrevFollowedUser(username);
+      if (!previous) return false;
+      if (excludeUsers.includes(username)) return false;
+      return (new Date().getTime() - previous.time) / (1000 * 60 * 60 * 24) > ageInDaysResolved;
     }
 
     return safelyUnfollowUserList(followingUsersGenerator, limit, condition);
@@ -1213,7 +1475,5 @@ const Instauto = async (db: any, browser: any, options: any) => {
     navigateToUserAndGetData,
   };
 };
-
-(Instauto as any).JSONDB = JSONDB;
 
 export default Instauto;

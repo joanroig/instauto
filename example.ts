@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use strict';
 
 // eslint-disable-next-line import/no-extraneous-dependencies
@@ -6,32 +5,41 @@ import 'dotenv/config';
 
 import puppeteer from 'puppeteer'; // eslint-disable-line import/no-extraneous-dependencies
 
-import Instauto from './src/index.js';
-// or:
-// const Instauto = require('instauto'); // eslint-disable-line import/no-unresolved
+import Instauto, { JSONDB, type InstautoOptions } from './src/index.ts';
+// or if installed via `npm`:
+// import Instauto, { type InstautoOptions } from 'instauto';
 
 // Optional: Custom logger with timestamps
-const log = (fn: string, ...args: any[]) => console[fn as keyof Console](new Date().toISOString(), ...args);
-const logger = Object.fromEntries(['log', 'info', 'debug', 'error', 'trace', 'warn'].map((fn) => [fn, (...args: any[]) => log(fn, ...args)])) as unknown as Console;
+type LoggerMethodName = 'log' | 'info' | 'debug' | 'error' | 'trace' | 'warn';
 
-const options = {
+const log = (fn: LoggerMethodName, ...args: unknown[]) => console[fn](new Date().toISOString(), ...args);
+const logger = {
+  log: (...args: unknown[]) => log('log', ...args),
+  info: (...args: unknown[]) => log('info', ...args),
+  debug: (...args: unknown[]) => log('debug', ...args),
+  error: (...args: unknown[]) => log('error', ...args),
+  trace: (...args: unknown[]) => log('trace', ...args),
+  warn: (...args: unknown[]) => log('warn', ...args),
+};
+
+const options: InstautoOptions = {
   cookiesPath: './cookies.json',
 
-  username: process.env.INSTAGRAM_USERNAME,
-  password: process.env.INSTAGRAM_PASSWORD,
+  username: process.env['INSTAGRAM_USERNAME']!,
+  password: process.env['INSTAGRAM_PASSWORD']!,
 
   // Global limit that prevents follow or unfollows (total) to exceed this number over a sliding window of one hour:
-  maxFollowsPerHour: process.env.MAX_FOLLOWS_PER_HOUR != null ? parseInt(process.env.MAX_FOLLOWS_PER_HOUR, 10) : 20,
+  maxFollowsPerHour: process.env['MAX_FOLLOWS_PER_HOUR'] != null ? parseInt(process.env['MAX_FOLLOWS_PER_HOUR'], 10) : 20,
   // Global limit that prevents follow or unfollows (total) to exceed this number over a sliding window of one day:
-  maxFollowsPerDay: process.env.MAX_FOLLOWS_PER_DAY != null ? parseInt(process.env.MAX_FOLLOWS_PER_DAY, 10) : 150,
+  maxFollowsPerDay: process.env['MAX_FOLLOWS_PER_DAY'] != null ? parseInt(process.env['MAX_FOLLOWS_PER_DAY'], 10) : 150,
   // (NOTE setting the above parameters too high will cause temp ban/throttle)
 
-  maxLikesPerDay: process.env.MAX_LIKES_PER_DAY != null ? parseInt(process.env.MAX_LIKES_PER_DAY, 10) : 30,
+  maxLikesPerDay: process.env['MAX_LIKES_PER_DAY'] != null ? parseInt(process.env['MAX_LIKES_PER_DAY'], 10) : 30,
 
   // Don't follow users that have a followers / following ratio less than this:
-  followUserRatioMin: process.env.FOLLOW_USER_RATIO_MIN != null ? parseFloat(process.env.FOLLOW_USER_RATIO_MIN) : 0.2,
+  followUserRatioMin: process.env['FOLLOW_USER_RATIO_MIN'] != null ? parseFloat(process.env['FOLLOW_USER_RATIO_MIN']) : 0.2,
   // Don't follow users that have a followers / following ratio higher than this:
-  followUserRatioMax: process.env.FOLLOW_USER_RATIO_MAX != null ? parseFloat(process.env.FOLLOW_USER_RATIO_MAX) : 4.0,
+  followUserRatioMax: process.env['FOLLOW_USER_RATIO_MAX'] != null ? parseFloat(process.env['FOLLOW_USER_RATIO_MAX']) : 4.0,
   // Don't follow users who have more followers than this:
   followUserMaxFollowers: null,
   // Don't follow users who have more people following them than this:
@@ -94,7 +102,7 @@ try {
   });
 
   // Create a database where state will be loaded/saved to
-  const instautoDb = await (Instauto as any).JSONDB({
+  const instautoDb = await JSONDB({
     // Will store a list of all users that have been followed before, to prevent future re-following.
     followedDbPath: './followed.json',
     // Will store all unfollowed users here
@@ -103,7 +111,8 @@ try {
     likedPhotosDbPath: './liked-photos.json',
   });
 
-  const instauto = await (Instauto as any)(instautoDb, browser, options);
+  if (!browser) throw new Error('Failed to launch browser');
+  const instauto = await Instauto(instautoDb, browser, options);
 
   // This can be used to unfollow people:
   // Will unfollow auto-followed AND manually followed accounts who are not following us back, after some time has passed
@@ -114,17 +123,17 @@ try {
   // Unfollow previously auto-followed users (regardless of whether or not they are following us back)
   // after a certain amount of days (2 weeks)
   // Leave room to do following after this too (unfollow 2/3 of maxFollowsPerDay)
-  const unfollowedCount = await instauto.unfollowOldFollowed({ ageInDays: 14, limit: (options as any).maxFollowsPerDay * (2 / 3) });
+  const unfollowedCount = await instauto.unfollowOldFollowed({ ageInDays: 14, limit: (options.maxFollowsPerDay ?? 0) * (2 / 3) });
 
   if (unfollowedCount > 0) await instauto.sleep(10 * 60 * 1000);
 
   // List of usernames that we should follow the followers of, can be celebrities etc.
-  const usersToFollowFollowersOf = process.env.USERS_TO_FOLLOW != null ? process.env.USERS_TO_FOLLOW.split(',') : [];
+  const usersToFollowFollowersOf = process.env['USERS_TO_FOLLOW'] != null ? process.env['USERS_TO_FOLLOW'].split(',') : [];
 
   // Now go through each of these and follow a certain amount of their followers
   await instauto.followUsersFollowers({
     usersToFollowFollowersOf,
-    maxFollowsTotal: (options as any).maxFollowsPerDay - unfollowedCount,
+    maxFollowsTotal: (options.maxFollowsPerDay ?? 0) - unfollowedCount,
     skipPrivate: true,
     enableLikeImages: true,
     likeImagesMax: 3,
