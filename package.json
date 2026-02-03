@@ -15,6 +15,9 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "author": "Mikael Finstad <finstaden@gmail.com>",
   "repository": "mifi/instauto",
   "license": "MIT",
