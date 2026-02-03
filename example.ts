@@ -110,8 +110,10 @@ try {
     likedPhotosDbPath: './liked-photos.json',
   });
 
-  if (!browser) throw new Error('Failed to launch browser');
-  const instauto = await Instauto(instautoDb, browser, options);
+  const page = await browser.newPage();
+
+  const instauto = Instauto(instautoDb, page, options);
+  await instauto.init();
 
   // This can be used to unfollow people:
   // Will unfollow auto-followed AND manually followed accounts who are not following us back, after some time has passed

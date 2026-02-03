@@ -2,7 +2,7 @@ import assert from 'node:assert';
 import { readFile, writeFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import UserAgent from 'user-agents';
-import type { Browser, ElementHandle, Page, WaitForSelectorOptions } from 'puppeteer';
+import type { ElementHandle, Page, WaitForSelectorOptions } from 'puppeteer';
 import { type FollowedUser, type JSONDBInstance } from './db.ts'; // eslint-disable-line import/extensions
 
 
@@ -162,6 +162,7 @@ interface InstagramUser {
 }
 
 export interface InstautoApi {
+  init: () => Promise<void>;
   followUserFollowers: (username: string, options?: ProcessUserFollowersOptions) => Promise<void>;
   unfollowNonMutualFollowers: (options?: UnfollowOptions) => Promise<number>;
   unfollowAllUnknown: (options?: UnfollowOptions) => Promise<number>;
@@ -175,7 +176,6 @@ export interface InstautoApi {
   getUsersWhoLikedContent: (options: { contentId: string }) => AsyncGenerator<string[], string[], void>;
   safelyUnfollowUserList: (usersToUnfollow: AsyncIterable<string | string[]> | Iterable<string | string[]>, limit?: number, condition?: (username: string) => boolean | Promise<boolean>) => Promise<number>;
   safelyFollowUserList: (options: SafelyFollowUserListOptions) => Promise<void>;
-  getPage: () => Page;
   followUsersFollowers: (options: ProcessUsersFollowersOptions) => Promise<void>;
   doesUserFollowMe: (username: string) => Promise<boolean | undefined>;
   navigateToUserAndGetData: (username: string) => Promise<InstagramUser | undefined>;
@@ -224,7 +224,7 @@ const botWorkShiftHours = 16;
 const dayMs = 24 * 60 * 60 * 1000;
 const hourMs = 60 * 60 * 1000;
 
-const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoOptions): Promise<InstautoApi> => {
+function Instauto(db: JSONDBInstance, page: Page, options: InstautoOptions): InstautoApi {
   const {
     instagramBaseUrl = 'https://www.instagram.com',
     cookiesPath,
@@ -279,7 +279,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
   const getNumLikesThisTimeUnit = (time: number) => getLikedPhotosLastTimeUnit(time).length;
 
   // State
-  let page: Page;
+  let myUserId: string | undefined;
 
   async function takeScreenshot() {
     if (!screenshotOnError) return;
@@ -1148,23 +1148,6 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
     }
   }
 
-  function getPage() {
-    return page;
-  }
-
-  page = await browser.newPage();
-
-  // https://github.com/mifi/SimpleInstaBot/issues/118#issuecomment-1067883091
-  await page.setExtraHTTPHeaders({ 'Accept-Language': 'en' });
-
-  if (randomizeUserAgent) {
-    const userAgentGenerated = new UserAgent({ deviceCategory: 'desktop' });
-    await page.setUserAgent({ userAgent: userAgentGenerated.toString() });
-  }
-  if (userAgent) await page.setUserAgent({ userAgent });
-
-  if (enableCookies) await tryLoadCookies();
-
   const goHome = async () => gotoUrl(`${instagramBaseUrl}/?hl=en`);
 
   // https://github.com/mifi/SimpleInstaBot/issues/28
@@ -1252,90 +1235,103 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
     return false;
   }
 
-  await setEnglishLang(false);
+  async function init() {
+    // https://github.com/mifi/SimpleInstaBot/issues/118#issuecomment-1067883091
+    await page.setExtraHTTPHeaders({ 'Accept-Language': 'en' });
 
-  await tryPressButton(await getXpathElement('//button[contains(text(), "Accept")]', { timeout: 1000 }), 'Accept cookies dialog', 10000);
-  await tryPressButton(await getXpathElement('//button[contains(text(), "Only allow essential cookies")]', { timeout: 100 }), 'Accept cookies dialog 2 button 1', 10000);
-  await tryPressButton(await getXpathElement('//button[contains(text(), "Allow essential and optional cookies")]', { timeout: 100 }), 'Accept cookies dialog 2 button 2', 10000);
-
-  if (!(await isLoggedIn())) {
-    if (!myUsername || !password) {
-      await tryDeleteCookies();
-      throw new Error('No longer logged in. Deleting cookies and aborting. Need to provide username/password');
+    if (randomizeUserAgent) {
+      const userAgentGenerated = new UserAgent({ deviceCategory: 'desktop' });
+      await page.setUserAgent({ userAgent: userAgentGenerated.toString() });
     }
+    if (userAgent) await page.setUserAgent({ userAgent });
+
+    if (enableCookies) await tryLoadCookies();
+
+    await setEnglishLang(false);
+
+    await tryPressButton(await getXpathElement('//button[contains(text(), "Accept")]', { timeout: 1000 }), 'Accept cookies dialog', 10000);
+    await tryPressButton(await getXpathElement('//button[contains(text(), "Only allow essential cookies")]', { timeout: 100 }), 'Accept cookies dialog 2 button 1', 10000);
+    await tryPressButton(await getXpathElement('//button[contains(text(), "Allow essential and optional cookies")]', { timeout: 100 }), 'Accept cookies dialog 2 button 2', 10000);
+
+    if (!(await isLoggedIn())) {
+      if (!myUsername || !password) {
+        await tryDeleteCookies();
+        throw new Error('No longer logged in. Deleting cookies and aborting. Need to provide username/password');
+      }
+
+      try {
+        await page.click('a[href="/accounts/login/?source=auth_switcher"]');
+        await sleep(1000);
+      } catch {
+        logger.info('No login page button, assuming we are on login form');
+      }
+
+      // Mobile version https://github.com/mifi/SimpleInstaBot/issues/7
+      await tryPressButton(await getXpathElement('//button[contains(text(), "Log In")]', { timeout: 1000 }), 'Login form button');
+
+      await page.type('input[name="username"]', myUsername, { delay: 50 });
+      await sleep(1000);
+      await page.type('input[name="password"]', password, { delay: 50 });
+      await sleep(1000);
+
+      for (;;) {
+        const didClickLogin = await tryClickLogin();
+        if (didClickLogin) break;
+        logger.warn('Login button not found. Maybe you can help me click it? And also report an issue on github with a screenshot of what you\'re seeing :)');
+        await sleep(6000);
+      }
+
+      await sleepFixed(10000);
+
+      // Sometimes login button gets stuck with a spinner
+      // https://github.com/mifi/SimpleInstaBot/issues/25
+      if (!(await isLoggedIn())) {
+        logger.log('Still not logged in, trying to reload loading page');
+        await page.reload();
+        await sleep(5000);
+      }
+
+      let warnedAboutLoginFail = false;
+      while (!(await isLoggedIn())) {
+        if (!warnedAboutLoginFail) logger.warn('WARNING: Login has not succeeded. This could be because of an incorrect username/password, or a "suspicious login attempt"-message. You need to manually complete the process, or if really logged in, click the Instagram logo in the top left to go to the Home page.');
+        warnedAboutLoginFail = true;
+        await sleep(5000);
+      }
+
+      // In case language gets reset after logging in
+      // https://github.com/mifi/SimpleInstaBot/issues/118
+      await setEnglishLang(true);
+
+      // Mobile version https://github.com/mifi/SimpleInstaBot/issues/7
+      await tryPressButton(await getXpathElement('//button[contains(text(), "Save Info")]', { timeout: 1000 }), 'Login info dialog: Save Info');
+      // May sometimes be "Save info" too? https://github.com/mifi/instauto/pull/70
+      await tryPressButton(await getXpathElement('//button[contains(text(), "Save info")]', { timeout: 1000 }), 'Login info dialog: Save info');
+    }
+
+    await tryPressButton(await getXpathElement('//button[contains(text(), "Not Now")]', { timeout: 1000 }), 'Turn on Notifications dialog');
+
+    await trySaveCookies();
+
+    logger.log(`Have followed/unfollowed ${getNumFollowedUsersThisTimeUnit(hourMs)} in the last hour`);
+    logger.log(`Have followed/unfollowed ${getNumFollowedUsersThisTimeUnit(dayMs)} in the last 24 hours`);
+    logger.log(`Have liked ${getNumLikesThisTimeUnit(dayMs)} images in the last 24 hours`);
 
     try {
-      await page.click('a[href="/accounts/login/?source=auth_switcher"]');
-      await sleep(1000);
-    } catch {
-      logger.info('No login page button, assuming we are on login form');
+      // eslint-disable-next-line no-underscore-dangle
+      const detectedUsername = await page.evaluate(() => window._sharedData?.config?.viewer?.username);
+      if (detectedUsername) myUsername = detectedUsername;
+    } catch (err) {
+      logger.error('Failed to detect username', err);
     }
 
-    // Mobile version https://github.com/mifi/SimpleInstaBot/issues/7
-    await tryPressButton(await getXpathElement('//button[contains(text(), "Log In")]', { timeout: 1000 }), 'Login form button');
-
-    await page.type('input[name="username"]', myUsername, { delay: 50 });
-    await sleep(1000);
-    await page.type('input[name="password"]', password, { delay: 50 });
-    await sleep(1000);
-
-    for (;;) {
-      const didClickLogin = await tryClickLogin();
-      if (didClickLogin) break;
-      logger.warn('Login button not found. Maybe you can help me click it? And also report an issue on github with a screenshot of what you\'re seeing :)');
-      await sleep(6000);
+    if (!myUsername) {
+      throw new Error('Don\'t know what\'s my username');
     }
 
-    await sleepFixed(10000);
-
-    // Sometimes login button gets stuck with a spinner
-    // https://github.com/mifi/SimpleInstaBot/issues/25
-    if (!(await isLoggedIn())) {
-      logger.log('Still not logged in, trying to reload loading page');
-      await page.reload();
-      await sleep(5000);
-    }
-
-    let warnedAboutLoginFail = false;
-    while (!(await isLoggedIn())) {
-      if (!warnedAboutLoginFail) logger.warn('WARNING: Login has not succeeded. This could be because of an incorrect username/password, or a "suspicious login attempt"-message. You need to manually complete the process, or if really logged in, click the Instagram logo in the top left to go to the Home page.');
-      warnedAboutLoginFail = true;
-      await sleep(5000);
-    }
-
-    // In case language gets reset after logging in
-    // https://github.com/mifi/SimpleInstaBot/issues/118
-    await setEnglishLang(true);
-
-    // Mobile version https://github.com/mifi/SimpleInstaBot/issues/7
-    await tryPressButton(await getXpathElement('//button[contains(text(), "Save Info")]', { timeout: 1000 }), 'Login info dialog: Save Info');
-    // May sometimes be "Save info" too? https://github.com/mifi/instauto/pull/70
-    await tryPressButton(await getXpathElement('//button[contains(text(), "Save info")]', { timeout: 1000 }), 'Login info dialog: Save info');
+    const me = await navigateToUserAndGetData(myUsername);
+    if (!me) throw new Error('Failed to load my user data');
+    ({ id: myUserId } = me);
   }
-
-  await tryPressButton(await getXpathElement('//button[contains(text(), "Not Now")]', { timeout: 1000 }), 'Turn on Notifications dialog');
-
-  await trySaveCookies();
-
-  logger.log(`Have followed/unfollowed ${getNumFollowedUsersThisTimeUnit(hourMs)} in the last hour`);
-  logger.log(`Have followed/unfollowed ${getNumFollowedUsersThisTimeUnit(dayMs)} in the last 24 hours`);
-  logger.log(`Have liked ${getNumLikesThisTimeUnit(dayMs)} images in the last 24 hours`);
-
-  try {
-    // eslint-disable-next-line no-underscore-dangle
-    const detectedUsername = await page.evaluate(() => window._sharedData?.config?.viewer?.username);
-    if (detectedUsername) myUsername = detectedUsername;
-  } catch (err) {
-    logger.error('Failed to detect username', err);
-  }
-
-  if (!myUsername) {
-    throw new Error('Don\'t know what\'s my username');
-  }
-
-  const me = await navigateToUserAndGetData(myUsername);
-  if (!me) throw new Error('Failed to load my user data');
-  const { id: myUserId } = me;
 
   // --- END OF INITIALIZATION
 
@@ -1379,6 +1375,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
       userId: myUserId,
       getFollowers: true,
     }); */
+    assert(myUserId);
     const allFollowingGenerator = getFollowersOrFollowingGenerator({
       userId: myUserId,
       getFollowers: false,
@@ -1403,6 +1400,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
   async function unfollowAllUnknown({ limit }: UnfollowOptions = {}) {
     logger.log('Unfollowing all except excludes and auto followed');
 
+    assert(myUserId);
     const unfollowUsersGenerator = getFollowersOrFollowingGenerator({
       userId: myUserId,
       getFollowers: false,
@@ -1423,6 +1421,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
     const ageInDaysResolved = ageInDays;
     logger.log(`Unfollowing currently followed users who were auto-followed more than ${ageInDaysResolved} days ago (limit ${limit})...`);
 
+    assert(myUserId);
     const followingUsersGenerator = getFollowersOrFollowingGenerator({
       userId: myUserId,
       getFollowers: false,
@@ -1439,6 +1438,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
   }
 
   async function listManuallyFollowedUsers() {
+    assert(myUserId);
     const allFollowing = await getFollowersOrFollowing({
       userId: myUserId,
       getFollowers: false,
@@ -1448,6 +1448,7 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
   }
 
   return {
+    init,
     followUserFollowers: processUserFollowers,
     unfollowNonMutualFollowers,
     unfollowAllUnknown,
@@ -1461,12 +1462,11 @@ const Instauto = async (db: JSONDBInstance, browser: Browser, options: InstautoO
     getUsersWhoLikedContent,
     safelyUnfollowUserList,
     safelyFollowUserList,
-    getPage,
     followUsersFollowers: processUsersFollowers,
     doesUserFollowMe,
     navigateToUserAndGetData,
   };
-};
+}
 
 export default Instauto;
 
