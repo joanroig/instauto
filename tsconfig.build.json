@@ -6,7 +6,8 @@
     "declaration": true,
     "declarationMap": true,
     "emitDeclarationOnly": false,
-    "sourceMap": false
+    "sourceMap": false,
+    "rootDir": "src"
   },
-  "include": ["src/**/*", "example.ts"]
+  "include": ["src/**/*"]
 }
