@@ -1222,19 +1222,6 @@ function Instauto(db: JSONDBInstance, page: Page, options: InstautoOptions): Ins
     }
   }
 
-  async function tryClickLogin() {
-    async function tryClickButton(xpath: string) {
-      const btn = await getXpathElement(xpath, { timeout: 1000 });
-      if (btn == null) return false;
-      await btn.click();
-      return true;
-    }
-
-    if (await tryClickButton("//button[.//text() = 'Log In']")) return true;
-    if (await tryClickButton("//button[.//text() = 'Log in']")) return true; // https://github.com/mifi/instauto/pull/110 https://github.com/mifi/instauto/issues/109
-    return false;
-  }
-
   async function init() {
     // https://github.com/mifi/SimpleInstaBot/issues/118#issuecomment-1067883091
     await page.setExtraHTTPHeaders({ 'Accept-Language': 'en' });
@@ -1269,17 +1256,13 @@ function Instauto(db: JSONDBInstance, page: Page, options: InstautoOptions): Ins
       // Mobile version https://github.com/mifi/SimpleInstaBot/issues/7
       await tryPressButton(await getXpathElement('//button[contains(text(), "Log In")]', { timeout: 1000 }), 'Login form button');
 
-      await page.type('input[name="username"]', myUsername, { delay: 50 });
+      await page.type('input[name="email"]', myUsername, { delay: 50 });
       await sleep(1000);
-      await page.type('input[name="password"]', password, { delay: 50 });
-      await sleep(1000);
-
-      for (;;) {
-        const didClickLogin = await tryClickLogin();
-        if (didClickLogin) break;
-        logger.warn('Login button not found. Maybe you can help me click it? And also report an issue on github with a screenshot of what you\'re seeing :)');
-        await sleep(6000);
-      }
+      await page.type('input[name="pass"]', password, { delay: 50 });
+      await sleep(500);
+      // Focus password field and press Enter to submit login
+      await page.focus('input[name="pass"]');
+      await page.keyboard.press('Enter');
 
       await sleepFixed(10000);
 
