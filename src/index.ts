@@ -581,8 +581,8 @@ function Instauto(db: JSONDBInstance, page: Page, options: InstautoOptions): Ins
   }
 
   async function isActionBlocked() {
-    if (!(await getXpathElement('//*[contains(text(), "Action Blocked")]', { timeout: 1000 }))) return true;
-    if (!(await getXpathElement('//*[contains(text(), "Try Again Later")]', { timeout: 1000 }))) return true;
+    if (await getXpathElement('//*[contains(text(), "Action Blocked")]', { timeout: 1000 })) return true;
+    if (await getXpathElement('//*[contains(text(), "Try Again Later")]', { timeout: 1000 })) return true;
     return false;
   }
 
